@@ -107,7 +107,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Rebuild touch controls
-    if (this._touchContainer) this._touchContainer.destroy()
     this._createTouchControls(L)
 
     // Tell HUD to reposition
@@ -115,62 +114,73 @@ export class GameScene extends Phaser.Scene {
   }
 
   _createTouchControls(L) {
-    const { W, H, btnR, btnPad, font, isPortrait } = L
+    const { W, H, btnR, btnPad, font } = L
 
-    // Show on mobile or narrow windows
-    const showTouch = !this.sys.game.device.os.desktop || W < 700
+    // Always create touch controls — they're hidden on desktop via opacity
+    // Using CSS touch detection is more reliable than Phaser's device flags
+    const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0
+    const showTouch = isTouchDevice || W < 800
 
-    this._touchContainer = this.add.container(0, 0).setDepth(200)
+    // Track all touch objects so we can destroy them on resize
+    this._touchObjs = this._touchObjs || []
+    for (const obj of this._touchObjs) { try { obj.destroy() } catch {} }
+    this._touchObjs = []
 
     if (!showTouch) return
 
-    const cy = H - btnPad - btnR  // button centre Y
+    const cy = H - btnPad - btnR
 
     const makeBtn = (cx, icon, label, colorHex, onDown, onUp) => {
-      const bg = this.add.circle(cx, cy, btnR, colorHex, 0.55)
+      // Visual layers — NOT interactive, just cosmetic
+      const bg = this.add.circle(cx, cy, btnR, colorHex, 0.6)
         .setScrollFactor(0).setDepth(200)
       const ring = this.add.circle(cx, cy, btnR, 0x000000, 0)
-        .setScrollFactor(0).setDepth(200)
-      ring.setStrokeStyle(1.5, 0xffffff, 0.2)
+        .setScrollFactor(0).setDepth(201)
+      ring.setStrokeStyle(2, 0xffffff, 0.25)
 
-      // Icon
       const iconTxt = this.add.text(cx, cy, icon, {
         fontFamily: 'Material Symbols Rounded',
-        fontSize:   Math.max(18, btnR * 0.9) + 'px',
+        fontSize:   Math.max(20, btnR) + 'px',
         color:      '#ffffff',
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(201)
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(202)
 
-      // Small label below button
-      this.add.text(cx, cy + btnR + 4, label, {
+      const labelTxt = this.add.text(cx, cy + btnR + 5, label, {
         fontFamily: "'Press Start 2P'",
-        fontSize:   Math.max(4, font.xs - 1) + 'px',
-        color:      '#666688',
-      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(201)
+        fontSize:   Math.max(5, font.xs) + 'px',
+        color:      '#8888aa',
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(202)
 
-      // Big invisible zone for easy tapping
-      const hitZone = this.add.circle(cx, cy, btnR + 10, 0x000000, 0)
-        .setScrollFactor(0).setDepth(202).setInteractive()
+      // The hit zone: a Rectangle (NOT inside a Container — containers break child input)
+      // Use a large Rectangle so fingers don't have to be precise
+      const hitW = btnR * 2.4
+      const hitH = btnR * 2.4
+      const hitZone = this.add.rectangle(cx, cy, hitW, hitH, 0x000000, 0)
+        .setScrollFactor(0).setDepth(203)
+        .setInteractive({ useHandCursor: false })
 
-      hitZone.on('pointerdown', e => {
-        e.stopPropagation()
+      hitZone.on('pointerdown', () => {
         onDown()
         audio.resume()
-        bg.setAlpha(0.9)
-        bg.setScale(1.1)
+        bg.setAlpha(1.0)
+        bg.setScale(1.12)
       })
-      hitZone.on('pointerup',  () => { onUp(); bg.setAlpha(0.55); bg.setScale(1) })
-      hitZone.on('pointerout', () => { onUp(); bg.setAlpha(0.55); bg.setScale(1) })
+      hitZone.on('pointerup',     () => { onUp(); bg.setAlpha(0.6); bg.setScale(1) })
+      hitZone.on('pointerout',    () => { onUp(); bg.setAlpha(0.6); bg.setScale(1) })
+      hitZone.on('pointercancel', () => { onUp(); bg.setAlpha(0.6); bg.setScale(1) })
 
-      this._touchContainer.add([bg, ring, iconTxt, hitZone])
+      this._touchObjs.push(bg, ring, iconTxt, labelTxt, hitZone)
     }
 
     const leftX  = btnPad + btnR
     const rightX = W - btnPad - btnR
     const midX   = W / 2
 
-    makeBtn(leftX,  'fast_rewind',       'SLOW',  0x2244cc, () => { this._mobileSlowDown = true  }, () => { this._mobileSlowDown = false })
-    makeBtn(midX,   'keyboard_arrow_up', 'OLLIE', 0xcc1155, () => { this._mobileJump = true  },     () => { this._mobileJump = false })
-    makeBtn(rightX, 'fast_forward',      'FAST',  0x2244cc, () => { this._mobileSpeedUp = true  },  () => { this._mobileSpeedUp = false })
+    makeBtn(leftX,  'fast_rewind',       'SLOW',  0x2244cc,
+      () => { this._mobileSlowDown = true  }, () => { this._mobileSlowDown = false })
+    makeBtn(midX,   'keyboard_arrow_up', 'OLLIE', 0xcc1155,
+      () => { this._mobileJump = true  },     () => { this._mobileJump = false })
+    makeBtn(rightX, 'fast_forward',      'FAST',  0x2244cc,
+      () => { this._mobileSpeedUp = true  },  () => { this._mobileSpeedUp = false })
   }
 
   _onObstacleHit(playerSprite, obstacle) {
