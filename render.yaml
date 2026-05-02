@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: sk8er-boi
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npx serve dist --single -l $PORT
+    envVars:
+      - key: NODE_VERSION
+        value: 20

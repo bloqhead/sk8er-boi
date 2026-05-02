@@ -1,0 +1,19 @@
+{
+  "name": "sk8er-boi",
+  "version": "1.0.0",
+  "description": "An endless side-scrolling skateboarding game",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "serve dist --single -l ${PORT:-3000}"
+  },
+  "dependencies": {
+    "phaser": "^3.88.2",
+    "serve": "^14.2.4"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
