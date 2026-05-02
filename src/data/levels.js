@@ -4,12 +4,15 @@ export const LEVELS = [
     name: 'DOWNTOWN',
     subtitle: 'Street Hustle',
     bgColors: {
-      sky: [0x1a0533, 0x2d0b5c, 0x0d1b3e],
-      ground: [0x2a2a3a, 0x1f1f2e],
+      sky:    [0x0a0318, 0x1a0840, 0x0d1255],  // deep purple-blue night
+      ground: [0x1e1e28, 0x2a2a38],
       accent: 0xff2d78
     },
-    buildingColors: [0x1a1a2e, 0x16213e, 0x0f3460, 0x1a0533],
+    // Warm amber/terracotta buildings — clearly distinct from dark obstacles
+    buildingColors: [0x3d2408, 0x5c3510, 0x472c0c, 0x6b3d12, 0x382008],
     windowColor: 0xf5e642,
+    // Bright stripe at ground level so the road reads cleanly
+    groundStripeColor: 0xffdd44,
     speed: 220,
     maxSpeed: 380,
     obstacles: ['trash_can', 'pigeon', 'person_standing', 'curb', 'stairs', 'newspaper_box', 'child'],
@@ -23,12 +26,14 @@ export const LEVELS = [
     name: 'SUBURBIA',
     subtitle: 'Cul-de-sac Chaos',
     bgColors: {
-      sky: [0x0d2137, 0x1a3a5c, 0x0a1628],
-      ground: [0x2d4a1e, 0x1f3314],
+      sky:    [0x87ceeb, 0x5ba3d9, 0x3a7fbf],  // bright daytime sky blue
+      ground: [0x4a7c2f, 0x3a6020],             // green grass
       accent: 0x39ff14
     },
-    buildingColors: [0x3d2b1f, 0x4a3728, 0x2d1f12, 0x3a2a1a],
-    windowColor: 0x00f5ff,
+    // Warm pastel house colors — reads clearly against blue sky
+    buildingColors: [0xd4956a, 0xc4845a, 0xe8b88a, 0xb87048, 0xcc9070],
+    windowColor: 0x88ddff,
+    groundStripeColor: 0x6aaa3f,
     speed: 250,
     maxSpeed: 420,
     obstacles: ['trash_can', 'dog', 'mailbox', 'fire_hydrant', 'lawn_gnome', 'person_walking', 'child', 'stairs'],
@@ -42,12 +47,14 @@ export const LEVELS = [
     name: 'INDUSTRIAL',
     subtitle: 'Pipe Dreams',
     bgColors: {
-      sky: [0x0a0a0a, 0x1a1a1a, 0x0f0f0f],
-      ground: [0x3a2a1a, 0x2a1a0a],
+      sky:    [0x1a1208, 0x2a1e0e, 0x100c04],  // dark amber smoggy sky
+      ground: [0x2a2010, 0x1e1808],
       accent: 0x00f5ff
     },
-    buildingColors: [0x2a2a2a, 0x1a1a1a, 0x333333, 0x222222],
+    // Teal/steel-blue industrial buildings — pops against amber sky + dark ground
+    buildingColors: [0x1a4040, 0x0f3535, 0x245050, 0x1c4848, 0x102e2e],
     windowColor: 0xff6600,
+    groundStripeColor: 0xff8800,
     speed: 280,
     maxSpeed: 460,
     obstacles: ['barrel', 'forklift_wheel', 'pipe', 'worker', 'cone', 'dog'],
@@ -61,12 +68,14 @@ export const LEVELS = [
     name: 'NEON CITY',
     subtitle: 'Midnight Run',
     bgColors: {
-      sky: [0x050010, 0x0d0020, 0x030008],
-      ground: [0x1a0030, 0x0d0020],
+      sky:    [0x000510, 0x000820, 0x000308],  // very deep near-black
+      ground: [0x0a0018, 0x060010],
       accent: 0xf5e642
     },
-    buildingColors: [0x0d0020, 0x1a0033, 0x0a001a, 0x15002a],
+    // Deep teal/indigo buildings with neon trim — obstacles pop as bright colors
+    buildingColors: [0x060a2a, 0x040820, 0x080c30, 0x050924, 0x060b28],
     windowColor: 0xff00ff,
+    groundStripeColor: 0x8800ff,
     speed: 310,
     maxSpeed: 500,
     obstacles: ['trash_can', 'neon_sign', 'scooter', 'person_standing', 'dog', 'cone', 'person_walking'],

@@ -31,6 +31,11 @@ export class Player {
     this.spinSpeed= 0
     this._trickDone = false
 
+    // X positioning — player slides forward/back based on speed
+    this._baseX       = x          // neutral position
+    this._targetX     = x          // where we want to be
+    this._xLerpSpeed  = 3.5        // how fast we slide (lerp factor per second)
+
     this._create(x, y)
     this._bindInput()
 
@@ -70,11 +75,25 @@ export class Player {
   get chargePercent() { return Math.min(this.chargeTime / GAME_CONSTANTS.JUMP_CHARGE_TIME, 1) }
   get onGround()      { return this.sprite.body.blocked.down }
 
+  // Called by GameScene whenever speed changes — slides player forward/back
+  setSpeedPosition(gameSpeed, baseSpeed, maxSpeed) {
+    // Normalise speed 0..1 across the speed range
+    const t = Phaser.Math.Clamp((gameSpeed - baseSpeed) / (maxSpeed - baseSpeed), -0.5, 1)
+    // At neutral: baseX. Speeding up: push forward +60px. Slowing down: pull back -40px.
+    this._targetX = this._baseX + t * 60 - (t < 0 ? Math.abs(t) * 40 : 0)
+  }
+
   // ─── Main update ─────────────────────────────────────────────────────
   update(delta, gameSpeed) {
     if (this.state === STATE.DEAD) return
 
     this.invincibleTimer = Math.max(0, this.invincibleTimer - delta)
+
+    // Smooth X slide toward target (not during crash so we don't fight knockback)
+    if (this.state !== STATE.CRASHED && this.state !== STATE.DEAD) {
+      const lerpT = 1 - Math.pow(1 - this._xLerpSpeed * 0.01, delta / 16)
+      this.sprite.x = Phaser.Math.Linear(this.sprite.x, this._targetX, lerpT)
+    }
 
     const jumpDown  = this.keys.up.isDown    || this.keys.space.isDown || this.scene._mobileJump
     const slowDown  = this.keys.left.isDown  || this.scene._mobileSlowDown
@@ -234,6 +253,7 @@ export class Player {
     this.chargeTime = 0
     this.sprite.body.setVelocityX(0)
     this.sprite.body.setVelocityY(0)
+    this._targetX = this._baseX   // return to neutral X
     this.invincibleTimer = GAME_CONSTANTS.INVINCIBLE_TIME
     this.animator.forceReset()
 

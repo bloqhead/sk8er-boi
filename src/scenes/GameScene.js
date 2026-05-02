@@ -239,8 +239,10 @@ export class GameScene extends Phaser.Scene {
     this.player.update(delta, this.gameSpeed)
 
     // ── Player X floor — never let them disappear off left edge ───────
-    if (this.player.sprite.x < this.playerMinX) {
-      this.player.sprite.x = this.playerMinX
+    // Allow sliding back to 20px when slow, 40px at neutral
+    const minX = Math.max(20, this.player._baseX - 50)
+    if (this.player.sprite.x < minX) {
+      this.player.sprite.x = minX
       if (this.player.sprite.body.velocity.x < 0) {
         this.player.sprite.body.setVelocityX(0)
       }
@@ -271,10 +273,12 @@ export class GameScene extends Phaser.Scene {
 
   increaseSpeed() {
     this.targetSpeed = Math.min(this.levelData.maxSpeed, this.targetSpeed + GAME_CONSTANTS.SPEED_INCREMENT)
+    this.player.setSpeedPosition(this.targetSpeed, this.levelData.speed, this.levelData.maxSpeed)
     audio.playSpeedUp()
   }
   reduceSpeed() {
     this.targetSpeed = Math.max(160, this.targetSpeed - GAME_CONSTANTS.SPEED_INCREMENT)
+    this.player.setSpeedPosition(this.targetSpeed, this.levelData.speed, this.levelData.maxSpeed)
     audio.playSlowDown()
   }
 
