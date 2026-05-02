@@ -1,186 +1,162 @@
 import { LEVELS } from '../data/levels.js'
-import { GAME_W, GAME_H } from '../main.js'
+import { layout } from './Layout.js'
 
 export class BackgroundSystem {
   constructor(scene, levelId) {
     this.scene = scene
     this.level = LEVELS.find(l => l.id === levelId) || LEVELS[0]
     this.layers = []
-    this.groundY = GAME_H - 40   // ground surface Y in game coords
-    this.create()
+
+    const L = layout(scene)
+    this.W = L.W
+    this.H = L.H
+    this.groundY = L.groundY
+
+    this._create()
   }
 
-  create() {
+  _create() {
     this._drawSky()
     this._addMoonOrSun()
-    this._createBuildingLayers()
-    this._createGround()
+    this._buildingLayers()
+    this._ground()
   }
 
   _drawSky() {
-    const lv = this.level
-    const colors = lv.bgColors.sky
+    const { W, H, groundY } = this
+    const colors = this.level.bgColors.sky
     const c = document.createElement('canvas')
-    c.width = GAME_W; c.height = GAME_H
+    c.width = W; c.height = H
     const ctx = c.getContext('2d')
-    const grad = ctx.createLinearGradient(0, 0, 0, GAME_H * 0.7)
-    grad.addColorStop(0,   `#${colors[0].toString(16).padStart(6,'0')}`)
-    grad.addColorStop(0.6, `#${colors[1].toString(16).padStart(6,'0')}`)
-    grad.addColorStop(1,   `#${colors[2].toString(16).padStart(6,'0')}`)
+    const grad = ctx.createLinearGradient(0, 0, 0, groundY)
+    grad.addColorStop(0,   '#' + colors[0].toString(16).padStart(6, '0'))
+    grad.addColorStop(0.6, '#' + colors[1].toString(16).padStart(6, '0'))
+    grad.addColorStop(1,   '#' + colors[2].toString(16).padStart(6, '0'))
     ctx.fillStyle = grad
-    ctx.fillRect(0, 0, GAME_W, GAME_H)
+    ctx.fillRect(0, 0, W, H)
 
-    // Stars for dark levels
     if ([1, 3, 4].includes(this.level.id)) {
-      for (let i = 0; i < 60; i++) {
-        const x = Math.random() * GAME_W
-        const y = Math.random() * GAME_H * 0.65
-        const bright = Math.random() > 0.6
-        ctx.fillStyle = bright ? 'rgba(255,255,255,0.9)' : 'rgba(180,180,220,0.4)'
-        const sz = Math.random() < 0.1 ? 2 : 1
-        ctx.fillRect(Math.floor(x), Math.floor(y), sz, sz)
+      for (let i = 0; i < 80; i++) {
+        ctx.fillStyle = Math.random() > 0.6
+          ? 'rgba(255,255,255,0.85)'
+          : 'rgba(180,180,220,0.4)'
+        const sz = Math.random() < 0.12 ? 2 : 1
+        ctx.fillRect(Math.random() * W | 0, (Math.random() * groundY * 0.85) | 0, sz, sz)
       }
     }
 
-    if (!this.scene.textures.exists('sky_' + this.level.id)) {
-      this.scene.textures.addCanvas('sky_' + this.level.id, c)
-    }
-    const sky = this.scene.add.image(0, 0, 'sky_' + this.level.id).setOrigin(0).setScrollFactor(0).setDepth(-10)
+    const key = 'sky_' + this.level.id
+    if (!this.scene.textures.exists(key)) this.scene.textures.addCanvas(key, c)
+    const sky = this.scene.add.image(0, 0, key).setOrigin(0).setScrollFactor(0).setDepth(-10)
     this.layers.push({ obj: sky, speed: 0 })
   }
 
   _addMoonOrSun() {
+    const { W, H } = this
     const g = this.scene.add.graphics().setScrollFactor(0).setDepth(-9)
-    const mx = GAME_W * 0.78, my = GAME_H * 0.14, r = 10
+    const mx = W * 0.80, my = H * 0.10
+    const r  = Math.max(8, W * 0.022)
 
     if (this.level.id === 2) {
-      // Daytime sun
-      g.fillStyle(0xffee88, 1)
-      g.fillCircle(mx, my, r)
-      g.fillStyle(0xffdd44, 0.5)
-      g.fillCircle(mx, my, r + 4)
+      g.fillStyle(0xffee88, 1); g.fillCircle(mx, my, r)
+      g.fillStyle(0xffdd44, 0.4); g.fillCircle(mx, my, r + r * 0.4)
     } else {
-      // Moon
       g.fillStyle(this.level.id === 4 ? 0xccccff : 0xeeeebb, 0.9)
       g.fillCircle(mx, my, r)
-      // Craters
-      g.fillStyle(0x000000, 0.08)
-      g.fillCircle(mx - 3, my - 2, 3)
-      g.fillCircle(mx + 2, my + 3, 2)
+      g.fillStyle(0x000000, 0.07)
+      g.fillCircle(mx - r * 0.3, my - r * 0.2, r * 0.3)
+      g.fillCircle(mx + r * 0.2, my + r * 0.3, r * 0.2)
     }
     this.layers.push({ obj: g, speed: 0 })
   }
 
-  _createBuildingLayers() {
+  _buildingLayers() {
+    const { W, groundY } = this
     const lv = this.level
-    const gY = this.groundY
-
-    // Far layer — slowest parallax
-    this._makeBuildingStrip('far', GAME_W, gY, lv.buildingColors, lv.windowColor, 0.12, -6,
-      { minW: 15, maxW: 28, minH: gY * 0.20, maxH: gY * 0.38 })
-
-    // Mid layer
-    this._makeBuildingStrip('mid', GAME_W, gY, lv.buildingColors, lv.windowColor, 0.30, -5,
-      { minW: 18, maxW: 32, minH: gY * 0.28, maxH: gY * 0.50 })
-
-    // Near layer — fastest parallax, biggest buildings
-    this._makeBuildingStrip('near', GAME_W, gY, lv.buildingColors, lv.windowColor, 0.55, -4,
-      { minW: 20, maxW: 38, minH: gY * 0.35, maxH: gY * 0.60 })
+    this._strip('far',   W, groundY, lv, 0.10, -6, 0.15, 0.32)
+    this._strip('mid',   W, groundY, lv, 0.28, -5, 0.24, 0.48)
+    this._strip('near',  W, groundY, lv, 0.52, -4, 0.32, 0.60)
   }
 
-  _makeBuildingStrip(name, sceneW, groundY, colors, windowColor, scrollFactor, depth, sizes) {
-    // Build a canvas wider than the screen to tile
-    const totalW = sceneW * 4
+  _strip(name, W, groundY, lv, scrollFactor, depth, minHF, maxHF) {
+    const totalW = W * 4
     const c = document.createElement('canvas')
     c.width = totalW; c.height = groundY + 2
     const ctx = c.getContext('2d')
 
     let x = 0
     while (x < totalW) {
-      const bw = sizes.minW + Math.floor(Math.random() * (sizes.maxW - sizes.minW))
-      const bh = sizes.minH + Math.floor(Math.random() * (sizes.maxH - sizes.minH))
-      const color = colors[Math.floor(Math.random() * colors.length)]
-      const wc = `#${windowColor.toString(16).padStart(6, '0')}`
+      const bw = (W * 0.04 + Math.random() * W * 0.07) | 0
+      const bh = (groundY * minHF + Math.random() * groundY * (maxHF - minHF)) | 0
+      const color = lv.buildingColors[Math.floor(Math.random() * lv.buildingColors.length)]
+      const wc = '#' + lv.windowColor.toString(16).padStart(6, '0')
 
-      ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`
+      ctx.fillStyle = '#' + color.toString(16).padStart(6, '0')
       ctx.fillRect(x, groundY - bh, bw, bh)
 
-      // Base shadow
       ctx.fillStyle = 'rgba(0,0,0,0.2)'
-      ctx.fillRect(x, groundY - Math.min(bh, 4), bw, Math.min(bh, 4))
+      ctx.fillRect(x, groundY - Math.min(bh, 5), bw, Math.min(bh, 5))
 
-      // Windows
-      for (let wy = groundY - bh + 3; wy < groundY - 1; wy += 5) {
-        for (let wx = x + 2; wx < x + bw - 2; wx += 4) {
-          if (Math.random() > 0.3) {
-            ctx.fillStyle = Math.random() > 0.45 ? wc : 'rgba(0,0,0,0.35)'
-            ctx.fillRect(wx, wy, 2, 3)
-          }
+      const wSize = Math.max(2, (bw * 0.18) | 0)
+      for (let wy = groundY - bh + wSize; wy < groundY - wSize; wy += wSize * 2) {
+        for (let wx = x + wSize; wx < x + bw - wSize; wx += wSize * 1.8) {
+          ctx.fillStyle = Math.random() > 0.38 ? wc : 'rgba(0,0,0,0.35)'
+          ctx.fillRect(wx | 0, wy | 0, wSize, (wSize * 1.4) | 0)
         }
       }
 
-      // Neon accent for city levels
-      if ((this.level.id === 1 || this.level.id === 4) && Math.random() < 0.15) {
+      if ((this.level.id === 1 || this.level.id === 4) && Math.random() < 0.14) {
         const nc = [0xff00ff, 0x00ffff, 0xff2d78, 0xf5e642][Math.floor(Math.random() * 4)]
-        ctx.fillStyle = `#${nc.toString(16).padStart(6, '0')}`
+        ctx.fillStyle = '#' + nc.toString(16).padStart(6, '0')
         ctx.globalAlpha = 0.7
-        ctx.fillRect(x + 2, groundY - bh * 0.6, 8, 2)
+        ctx.fillRect(x + 2, groundY - bh * 0.6, bw * 0.5, 2)
         ctx.globalAlpha = 1
       }
 
-      x += bw + Math.floor(Math.random() * 2 + 1)
+      x += bw + (Math.random() * 3 + 1 | 0)
     }
 
-    const key = `bld_${name}_${this.level.id}`
+    const key = `bld_${name}_${lv.id}`
     if (!this.scene.textures.exists(key)) this.scene.textures.addCanvas(key, c)
 
-    // tileSprite tiles the canvas automatically — perfect for endless scroll
-    const ts = this.scene.add.tileSprite(0, 0, sceneW, groundY + 2, key)
+    const ts = this.scene.add.tileSprite(0, 0, W, groundY + 2, key)
       .setOrigin(0, 0).setDepth(depth).setScrollFactor(0)
-
     this.layers.push({ obj: ts, speed: scrollFactor, tile: true })
   }
 
-  _createGround() {
-    const lv = this.level
-    const key = `ground_${lv.id}`
+  _ground() {
+    const { W, H, groundY } = this
+    const lv  = this.level
+    const key = 'ground_' + lv.id
+    const gh  = H - groundY
 
-    // Build a short canvas that tiles horizontally
-    const W = 96, H = 40
     const c = document.createElement('canvas')
-    c.width = W; c.height = H
+    c.width = 128; c.height = gh
     const ctx = c.getContext('2d')
-    ctx.fillStyle = `#${lv.bgColors.ground[0].toString(16).padStart(6, '0')}`
-    ctx.fillRect(0, 0, W, H)
+    ctx.fillStyle = '#' + lv.bgColors.ground[0].toString(16).padStart(6, '0')
+    ctx.fillRect(0, 0, 128, gh)
+    ctx.fillStyle = '#' + lv.bgColors.ground[1].toString(16).padStart(6, '0')
+    ctx.fillRect(0, 0, 128, 2)
 
-    // Surface stripe
-    ctx.fillStyle = `#${lv.bgColors.ground[1].toString(16).padStart(6, '0')}`
-    ctx.fillRect(0, 0, W, 2)
-
-    // Level-specific details
     if (lv.id === 1 || lv.id === 4) {
       ctx.fillStyle = 'rgba(255,255,255,0.06)'
-      for (let x = 0; x < W; x += 14) ctx.fillRect(x, 8, 8, 1)
+      for (let x = 0; x < 128; x += 14) ctx.fillRect(x, gh * 0.3, 8, 1)
     } else if (lv.id === 2) {
-      ctx.fillStyle = '#2d4a1e'
-      ctx.fillRect(0, 0, W, 3)
+      ctx.fillStyle = '#2d4a1e'; ctx.fillRect(0, 0, 128, 3)
     } else if (lv.id === 3) {
       ctx.fillStyle = 'rgba(0,0,0,0.12)'
-      for (let x = 0; x < W; x += 3)
-        for (let y = 0; y < H; y += 3)
+      for (let x = 0; x < 128; x += 3)
+        for (let y = 0; y < gh; y += 3)
           ctx.fillRect(x, y, 1, 1)
     }
-
     ctx.fillStyle = 'rgba(0,0,0,0.15)'
-    for (let x = 0; x < W; x += 12) ctx.fillRect(x, 0, 1, H)
+    for (let x = 0; x < 128; x += 12) ctx.fillRect(x, 0, 1, gh)
 
     if (!this.scene.textures.exists(key)) this.scene.textures.addCanvas(key, c)
 
-    const ground = this.scene.add.tileSprite(0, this.groundY, GAME_W, H, key)
+    const g = this.scene.add.tileSprite(0, groundY, W, gh, key)
       .setOrigin(0, 0).setDepth(-3).setScrollFactor(0)
-
-    this.groundSprite = ground
-    this.layers.push({ obj: ground, speed: 1, tile: true })
+    this.layers.push({ obj: g, speed: 1, tile: true })
   }
 
   update(delta, gameSpeed) {
@@ -191,7 +167,7 @@ export class BackgroundSystem {
   }
 
   destroy() {
-    for (const layer of this.layers) layer.obj.destroy()
+    for (const l of this.layers) l.obj.destroy()
     this.layers = []
   }
 }
