@@ -1,144 +1,116 @@
 import { LEVELS, OBSTACLES } from '../data/levels.js'
+import { GAME_W, GAME_H } from '../main.js'
 
 export class ObstacleSystem {
   constructor(scene, levelId) {
-    this.scene = scene
-    this.level = LEVELS.find(l => l.id === levelId) || LEVELS[0]
-    this.obstacles = scene.physics.add.staticGroup()
-    this.ramps = scene.physics.add.staticGroup()
-    this.rails = scene.physics.add.staticGroup()
+    this.scene    = scene
+    this.level    = LEVELS.find(l => l.id === levelId) || LEVELS[0]
+    this.obstacles= scene.physics.add.staticGroup()
+    this.ramps    = scene.physics.add.staticGroup()
+    this.rails    = scene.physics.add.staticGroup()
+    this.pool     = []
     this.spawnTimer = 0
-    this.rampTimer = 0
-    this.railTimer = 0
-    this.minGap = 280
-    this.maxGap = 560
-    this.nextSpawn = this.minGap
-    this.distanceTraveled = 0
-    this.activeObjects = []
-  }
-
-  get groundY() {
-    return this.scene.scale.height - 80
+    this.rampTimer  = 0
+    this.railTimer  = 0
+    this.nextSpawn  = 180
+    this.groundY    = GAME_H - 40
   }
 
   update(delta, gameSpeed, cameraX) {
     const dx = (gameSpeed / 1000) * delta
-    this.distanceTraveled += dx
     this.spawnTimer += dx
-    this.rampTimer += dx
-    this.railTimer += dx
+    this.rampTimer  += dx
+    this.railTimer  += dx
 
-    // Spawn obstacles
+    // Obstacles
     if (this.spawnTimer >= this.nextSpawn) {
       this.spawnTimer = 0
-      this.nextSpawn = Phaser.Math.Between(this.minGap, this.maxGap)
-      if (Math.random() < this.level.obstacleFrequency) {
-        this._spawnObstacle(cameraX)
-      }
+      this.nextSpawn  = Phaser.Math.Between(160, 380)
+      if (Math.random() < this.level.obstacleFrequency) this._spawnObstacle()
     }
 
-    // Spawn ramps
-    if (this.rampTimer >= 800) {
+    // Ramps
+    if (this.rampTimer >= 500) {
       this.rampTimer = 0
-      if (Math.random() < this.level.rampFrequency) {
-        this._spawnRamp(cameraX)
-      }
+      if (Math.random() < this.level.rampFrequency) this._spawnRamp()
     }
 
-    // Spawn rails
-    if (this.railTimer >= 1000) {
+    // Rails
+    if (this.railTimer >= 650) {
       this.railTimer = 0
-      if (Math.random() < this.level.railFrequency) {
-        this._spawnRail(cameraX)
-      }
+      if (Math.random() < this.level.railFrequency) this._spawnRail()
     }
 
-    // Scroll all objects
-    for (const obj of this.activeObjects) {
+    // Scroll all objects left
+    for (const obj of this.pool) {
       obj.x -= dx
       if (obj.body) obj.body.reset(obj.x, obj.y)
     }
 
-    // Cull off-screen
-    this.activeObjects = this.activeObjects.filter(obj => {
-      if (obj.x < cameraX - 300) {
-        this._removeObject(obj)
-        return false
-      }
+    // Cull
+    this.pool = this.pool.filter(obj => {
+      if (obj.x < -80) { obj.destroy(); return false }
       return true
     })
   }
 
-  _spawnObstacle(cameraX) {
-    const spawnX = cameraX + this.scene.scale.width + 100
-    const typeList = this.level.obstacles
-    const type = typeList[Math.floor(Math.random() * typeList.length)]
-    const def = OBSTACLES[type]
-    if (!def) return
+  _spawnX() { return GAME_W + 60 }
 
-    const textureKey = this._getTextureKey(type)
-    if (!this.scene.textures.exists(textureKey)) return
+  _spawnObstacle() {
+    const type    = this.level.obstacles[Math.floor(Math.random() * this.level.obstacles.length)]
+    const def     = OBSTACLES[type]
+    if (!def) return
+    const texKey  = this._texKey(type)
+    if (!this.scene.textures.exists(texKey)) return
 
     const y = def.flying
-      ? this.groundY - 60 - Math.random() * 40
+      ? this.groundY - 28 - Math.random() * 20
       : def.low
-        ? this.groundY - def.h / 2 - 20
-        : this.groundY - def.h / 2
+        ? this.groundY - (def.h * 3) / 2 - 8
+        : this.groundY - (def.h * 3) / 2
 
-    const obj = this.scene.physics.add.staticImage(spawnX, y, textureKey)
+    const obj = this.scene.physics.add.staticImage(this._spawnX(), y, texKey)
     obj.setImmovable(true)
     obj.obstacleType = type
-    obj.obstacleDef = def
-    obj.isRamp = false
-    obj.isRail = false
-    obj.label = def.label
+    obj.isRamp = false; obj.isRail = false
 
-    // Adjust hitbox
-    obj.body.setSize(def.w * 4 - 4, def.h * 4 - 4)
+    // Tighter hitbox for obstacles
+    const bw = def.w * 3 - 4
+    const bh = def.h * 3 - 4
+    obj.body.setSize(bw, bh)
 
     this.obstacles.add(obj)
-    this.activeObjects.push(obj)
+    this.pool.push(obj)
   }
 
-  _spawnRamp(cameraX) {
-    const spawnX = cameraX + this.scene.scale.width + 150
+  _spawnRamp() {
     const key = `ramp_${this.level.id}`
     if (!this.scene.textures.exists(key)) return
-
-    const rampW = 64
-    const rampH = 40
-    const y = this.groundY - rampH * 2
-
-    const ramp = this.scene.physics.add.staticImage(spawnX, y, key)
-    ramp.setImmovable(true)
-    ramp.isRamp = true
-    ramp.isRail = false
-    ramp.rampBoost = 0.7 + Math.random() * 0.6
-
-    this.ramps.add(ramp)
-    this.activeObjects.push(ramp)
+    // Ramp: 40w × 22h logical, × 3 = 120×66 canvas
+    const rampH = 22 * 3
+    const y = this.groundY - rampH / 2 + 10
+    const obj = this.scene.physics.add.staticImage(this._spawnX(), y, key)
+    obj.setImmovable(true)
+    obj.isRamp = true; obj.isRail = false
+    obj.rampBoost = 0.8 + Math.random() * 0.5
+    this.ramps.add(obj)
+    this.pool.push(obj)
   }
 
-  _spawnRail(cameraX) {
-    const spawnX = cameraX + this.scene.scale.width + 200
+  _spawnRail() {
     const key = `rail_${this.level.id}`
     if (!this.scene.textures.exists(key)) return
-
-    const railW = 96
-    const railH = 20
-    const railY = this.groundY - railH * 2 - 8
-
-    const rail = this.scene.physics.add.staticImage(spawnX, railY, key)
-    rail.setImmovable(true)
-    rail.isRail = true
-    rail.isRamp = false
-    rail.railLength = railW * 4
-
-    this.rails.add(rail)
-    this.activeObjects.push(rail)
+    // Rail: 56w × 10h logical × 3 = 168×30
+    const railH = 10 * 3
+    const y = this.groundY - railH - 14
+    const obj = this.scene.physics.add.staticImage(this._spawnX() + 30, y, key)
+    obj.setImmovable(true)
+    obj.isRail = true; obj.isRamp = false
+    this.rails.add(obj)
+    this.pool.push(obj)
   }
 
-  _getTextureKey(type) {
+  _texKey(type) {
     const MAP = {
       trash_can:       'trash_can',
       pigeon:          'person_walking',
@@ -158,19 +130,13 @@ export class ObstacleSystem {
       cone:            'cone',
       neon_sign:       'news_box',
       scooter:         'scooter',
-      forklift_wheel:  'barrel'
+      forklift_wheel:  'barrel',
     }
     return MAP[type] || 'trash_can'
   }
 
-  _removeObject(obj) {
-    obj.destroy()
-  }
-
   destroy() {
-    for (const obj of this.activeObjects) {
-      obj.destroy()
-    }
-    this.activeObjects = []
+    for (const obj of this.pool) obj.destroy()
+    this.pool = []
   }
 }

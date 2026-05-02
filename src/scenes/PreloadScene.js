@@ -1,61 +1,50 @@
 import { SpriteFactory } from '../systems/SpriteFactory.js'
 import { Leaderboard } from '../data/leaderboard.js'
 import { LEVELS } from '../data/levels.js'
+import { GAME_W, GAME_H } from '../main.js'
 
 export class PreloadScene extends Phaser.Scene {
-  constructor() {
-    super('PreloadScene')
-  }
+  constructor() { super('PreloadScene') }
 
   create() {
-    const { width, height } = this.scale
-    const S = 4
+    const S = 2  // UI pixel scale (smaller since canvas is fixed 480×270)
 
-    // Loading screen
-    this.add.rectangle(0, 0, width, height, 0x0a0a0f).setOrigin(0)
+    this.add.rectangle(0, 0, GAME_W, GAME_H, 0x0a0a0f).setOrigin(0)
 
-    const titleText = this.add.text(width / 2, height * 0.35, 'SK8ER BOI', {
+    // Title
+    const title = this.add.text(GAME_W / 2, GAME_H * 0.28, 'SK8ER BOI', {
       fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 8}px`,
+      fontSize: '18px',
       color: '#f5e642',
       stroke: '#000000',
-      strokeThickness: S * 2
+      strokeThickness: 4
     }).setOrigin(0.5)
 
-    // Animate title
     this.tweens.add({
-      targets: titleText,
-      y: height * 0.35 - S * 2,
-      duration: 600,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.InOut'
+      targets: title, y: GAME_H * 0.28 - 3,
+      duration: 700, yoyo: true, repeat: -1, ease: 'Sine.InOut'
     })
 
-    const loadText = this.add.text(width / 2, height * 0.58, 'LOADING...', {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 3}px`,
-      color: '#00f5ff'
+    this.add.text(GAME_W / 2, GAME_H * 0.48, 'LOADING...', {
+      fontFamily: "'Press Start 2P'", fontSize: '8px', color: '#00f5ff'
     }).setOrigin(0.5)
 
     // Progress bar
-    const barBg = this.add.rectangle(width / 2, height * 0.68, width * 0.5, S * 4, 0x333333).setOrigin(0.5)
-    const barFg = this.add.rectangle(width / 2 - width * 0.25, height * 0.68, 0, S * 4, 0x39ff14).setOrigin(0, 0.5)
+    const barW = GAME_W * 0.55
+    this.add.rectangle(GAME_W / 2, GAME_H * 0.60, barW + 4, 10, 0x222222).setOrigin(0.5)
+    const barBg = this.add.rectangle(GAME_W / 2 - barW / 2, GAME_H * 0.60, 0, 8, 0x39ff14).setOrigin(0, 0.5)
 
-    // Generate all sprites
     const factory = new SpriteFactory(this)
+
     const tasks = [
-      () => factory.createSkater('skater_idle', 'idle'),
-      () => factory.createSkater('skater_roll', 'roll'),
-      () => factory.createSkater('skater_ollie', 'ollie'),
-      () => factory.createSkater('skater_grind', 'grind'),
-      () => factory.createSkater('skater_crash', 'crash'),
-      () => factory.createSkater('skater_charge', 'charge'),
-      () => factory.createStairs('stairs'),
-      () => factory.createChild('child'),
+      // Skater — one spritesheet covers all animation frames
+      () => factory.createSkaterSheet('skater'),
+
+      // Obstacles
       () => factory.createTrashCan('trash_can'),
       () => factory.createPerson('person_standing', '#4444ff', false),
-      () => factory.createPerson('person_walking', '#ff4444', true),
+      () => factory.createPerson('person_walking',  '#ff4444', true),
+      () => factory.createChild('child'),
       () => factory.createDog('dog'),
       () => factory.createCone('cone'),
       () => factory.createBarrel('barrel'),
@@ -64,43 +53,43 @@ export class PreloadScene extends Phaser.Scene {
       () => factory.createNewsBox('news_box'),
       () => factory.createScooter('scooter'),
       () => factory.createCurb('curb'),
-      () => factory.createHeart('heart_full', true),
+      () => factory.createStairs('stairs'),
+
+      // Ramps and rails per level
+      ...LEVELS.map(lv => () => factory.createRamp(`ramp_${lv.id}`)),
+      ...LEVELS.map(lv => () => factory.createRail(`rail_${lv.id}`)),
+
+      // UI
+      () => factory.createHeart('heart_full',  true),
       () => factory.createHeart('heart_empty', false),
       () => factory.createStar('star'),
-      () => factory.createParticle('particle_white', '#ffffff', 3),
-      () => factory.createParticle('particle_yellow', '#f5e642', 3),
-      () => factory.createParticle('particle_pink', '#ff2d78', 3),
-      () => factory.createParticle('particle_cyan', '#00f5ff', 3),
+
+      // Particles
+      () => factory.createParticle('particle_white',  '#ffffff', 2),
+      () => factory.createParticle('particle_yellow', '#f5e642', 2),
+      () => factory.createParticle('particle_pink',   '#ff2d78', 2),
+      () => factory.createParticle('particle_cyan',   '#00f5ff', 2),
       () => factory.createSparkle('sparkle_yellow', '#f5e642'),
-      // Create ramps and rails for each level
-      ...LEVELS.map(lv => () => factory.createRamp(`ramp_${lv.id}`, 64, 40)),
-      ...LEVELS.map(lv => () => factory.createRail(`rail_${lv.id}`, 96, 20)),
     ]
 
     let i = 0
     const doNext = () => {
       if (i >= tasks.length) {
-        // Done
+        barBg.width = barW
         Leaderboard.seedWithDemoData()
-        barFg.width = width * 0.5
-        loadText.setText('PRESS ANY KEY!')
-        this.tweens.add({
-          targets: loadText,
-          alpha: 0,
-          duration: 400,
-          yoyo: true,
-          repeat: -1
-        })
+        const ready = this.add.text(GAME_W / 2, GAME_H * 0.76, 'PRESS ANY KEY', {
+          fontFamily: "'Press Start 2P'", fontSize: '8px', color: '#f5e642'
+        }).setOrigin(0.5)
+        this.tweens.add({ targets: ready, alpha: 0, duration: 400, yoyo: true, repeat: -1 })
         this.input.keyboard.once('keydown', () => this.scene.start('MenuScene'))
         this.input.once('pointerdown', () => this.scene.start('MenuScene'))
         return
       }
-      try { tasks[i]() } catch (e) { console.warn('Sprite gen error:', e) }
+      try { tasks[i]() } catch (e) { console.warn('Sprite gen:', e) }
       i++
-      barFg.width = (i / tasks.length) * width * 0.5
-      this.time.delayedCall(8, doNext)
+      barBg.width = (i / tasks.length) * barW
+      this.time.delayedCall(6, doNext)
     }
-
-    this.time.delayedCall(300, doNext)
+    this.time.delayedCall(200, doNext)
   }
 }

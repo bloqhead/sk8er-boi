@@ -1,254 +1,167 @@
 import { Leaderboard } from '../data/leaderboard.js'
 import { LEVELS } from '../data/levels.js'
+import { GAME_W, GAME_H } from '../main.js'
 import { audio } from '../audio/AudioManager.js'
+
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_'
 
 export class GameOverScene extends Phaser.Scene {
   constructor() {
     super('GameOverScene')
-    this.initials = ['A', 'A', 'A']
+    this.initials  = ['A', 'A', 'A']
     this.cursorPos = 0
-    this.phase = 'entry' // 'entry' | 'saved'
+    this.phase     = 'entry'
   }
 
   init(data) {
-    this.score = data.score || 0
-    this.levelId = data.level || 1
-    this.tricks = data.tricks || 0
+    this.score    = data.score    || 0
+    this.levelId  = data.level    || 1
+    this.tricks   = data.tricks   || 0
     this.distance = data.distance || 0
-    this.won = data.won || false
-    this.initials = ['A', 'A', 'A']
+    this.won      = data.won      || false
+    this.initials  = ['A', 'A', 'A']
     this.cursorPos = 0
-    this.phase = 'entry'
+    this.phase     = 'entry'
   }
 
   create() {
-    const { width, height } = this.scale
-    const S = 4
+    const gw = GAME_W, gh = GAME_H
+    this.add.rectangle(0, 0, gw, gh, 0x0a0a0f).setOrigin(0)
+    this._stars()
 
-    this.add.rectangle(0, 0, width, height, 0x0a0a0f).setOrigin(0)
-    this._addStars(width, height)
+    const titleStr   = this.won ? 'YOU WIN!!' : 'GAME OVER'
+    const titleColor = this.won ? '#f5e642'   : '#ff2d78'
 
-    // Title
-    const title = this.won ? 'YOU WIN!!' : 'GAME OVER'
-    const titleColor = this.won ? '#f5e642' : '#ff2d78'
-
-    this.add.text(width / 2, height * 0.1, title, {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 7}px`,
-      color: titleColor,
-      stroke: '#000000',
-      strokeThickness: S * 2
+    this.add.text(gw/2, gh*0.09, titleStr, {
+      fontFamily: "'Press Start 2P'", fontSize: '16px', color: titleColor,
+      stroke: '#000', strokeThickness: 4
     }).setOrigin(0.5)
 
-    // Score display
-    this.add.text(width / 2, height * 0.26, `SCORE: ${this.score.toLocaleString()}`, {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 4}px`,
-      color: '#f5e642'
+    this.add.text(gw/2, gh*0.26, 'SCORE: ' + this.score.toLocaleString(), {
+      fontFamily: "'Press Start 2P'", fontSize: '9px', color: '#f5e642'
     }).setOrigin(0.5)
 
-    // Stats
     const level = LEVELS.find(l => l.id === this.levelId)
-    const statsY = height * 0.38
     const stats = [
-      { label: 'LEVEL REACHED', value: level ? level.name : `LVL ${this.levelId}` },
-      { label: 'TRICKS LANDED', value: String(this.tricks) },
-      { label: 'DISTANCE', value: `${this.distance}m` }
+      { label: 'LEVEL',    value: level?.name || `LVL ${this.levelId}` },
+      { label: 'TRICKS',   value: String(this.tricks) },
+      { label: 'DISTANCE', value: `${this.distance}m` },
     ]
     stats.forEach((s, i) => {
-      this.add.text(width / 2 - 150, statsY + i * S * 6, s.label + ':', {
-        fontFamily: "'Press Start 2P'",
-        fontSize: `${S * 1.5}px`,
-        color: '#888888'
+      this.add.text(gw*0.18, gh*0.38 + i*14, s.label + ':', {
+        fontFamily: "'Press Start 2P'", fontSize: '5px', color: '#888888'
       })
-      this.add.text(width / 2 + 90, statsY + i * S * 6, s.value, {
-        fontFamily: "'Press Start 2P'",
-        fontSize: `${S * 1.5}px`,
-        color: '#ffffff'
-      })
+      this.add.text(gw*0.78, gh*0.38 + i*14, s.value, {
+        fontFamily: "'Press Start 2P'", fontSize: '5px', color: '#ffffff'
+      }).setOrigin(1, 0)
     })
 
-    // Rank
     const rank = Leaderboard.getRank(this.score)
-    this.add.text(width / 2, statsY + 3 * S * 6 + S * 2, `RANK: #${rank}`, {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 2.5}px`,
+    this.add.text(gw/2, gh*0.60, `RANK: #${rank}`, {
+      fontFamily: "'Press Start 2P'", fontSize: '6px',
       color: rank <= 3 ? '#f5e642' : '#aaaaaa'
     }).setOrigin(0.5)
 
-    // Initials entry
-    this.add.text(width / 2, height * 0.65, 'ENTER YOUR INITIALS:', {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 2}px`,
-      color: '#00f5ff'
+    this.add.text(gw/2, gh*0.68, 'ENTER INITIALS:', {
+      fontFamily: "'Press Start 2P'", fontSize: '5px', color: '#00f5ff'
     }).setOrigin(0.5)
 
-    this._createInitialEntry(width, height, S)
-    this._createButtons(width, height, S)
+    this._initContainer = null
+    this._drawInitials()
+    this._drawButtons()
 
-    // Input
     this.input.keyboard.on('keydown', this._onKey, this)
   }
 
-  _createInitialEntry(width, height, S) {
-    if (this._initialsContainer) this._initialsContainer.destroy()
-    this._initialsContainer = this.add.container(0, 0)
-
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_'
-    const charW = S * 10
-    const startX = width / 2 - charW
+  _drawInitials() {
+    if (this._initContainer) this._initContainer.destroy()
+    this._initContainer = this.add.container(0, 0)
+    const gw = GAME_W, gh = GAME_H
+    const cw = 22, cy = gh * 0.76
 
     this.initials.forEach((ch, i) => {
-      const x = startX + i * charW
-      const y = height * 0.74
-
-      // Box
-      const isActive = i === this.cursorPos && this.phase === 'entry'
-      const box = this.add.rectangle(x, y, charW - S, S * 10, isActive ? 0x222244 : 0x111122)
-        .setStrokeStyle(S / 2, isActive ? 0xf5e642 : 0x333366)
-      const letter = this.add.text(x, y, ch, {
-        fontFamily: "'Press Start 2P'",
-        fontSize: `${S * 6}px`,
-        color: isActive ? '#f5e642' : '#ffffff'
+      const cx = gw/2 - cw + i * cw
+      const sel = i === this.cursorPos && this.phase === 'entry'
+      const box = this.add.rectangle(cx, cy, cw-2, 20, sel ? 0x111133 : 0x0a0a1a)
+        .setStrokeStyle(sel ? 1.5 : 0.5, sel ? 0xf5e642 : 0x333366)
+      const ltr = this.add.text(cx, cy, ch, {
+        fontFamily: "'Press Start 2P'", fontSize: '12px',
+        color: sel ? '#f5e642' : '#ffffff'
       }).setOrigin(0.5)
-
-      if (isActive) {
-        this.tweens.add({
-          targets: letter,
-          alpha: 0.3,
-          duration: 400,
-          yoyo: true,
-          repeat: -1
-        })
-      }
-
-      this._initialsContainer.add([box, letter])
+      if (sel) this.tweens.add({ targets: ltr, alpha: 0.2, duration: 380, yoyo: true, repeat: -1 })
+      this._initContainer.add([box, ltr])
     })
 
-    // Arrows hint
-    const hint = this.add.text(width / 2, height * 0.83, '↑↓ CHANGE   → NEXT', {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 1.5}px`,
-      color: '#555555'
+    this.add.text(GAME_W/2, GAME_H * 0.86, '↑↓ CHANGE   → NEXT', {
+      fontFamily: "'Press Start 2P'", fontSize: '4px', color: '#444444'
     }).setOrigin(0.5)
-    this._initialsContainer.add(hint)
   }
 
-  _createButtons(width, height, S) {
+  _drawButtons() {
     if (this._btnContainer) this._btnContainer.destroy()
     this._btnContainer = this.add.container(0, 0)
+    const gw = GAME_W, gh = GAME_H
 
-    const saveBtn = this.add.text(width / 2 - 80, height * 0.9, 'SAVE', {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 3}px`,
-      color: '#39ff14',
-      backgroundColor: '#001100',
-      padding: { x: S * 2, y: S }
+    const saveBtn = this.add.text(gw/2 - 36, gh*0.92, 'SAVE', {
+      fontFamily: "'Press Start 2P'", fontSize: '7px', color: '#39ff14',
+      backgroundColor: '#001100', padding: { x: 4, y: 2 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true })
+    saveBtn.on('pointerover', () => saveBtn.setColor('#fff'))
+    saveBtn.on('pointerout',  () => saveBtn.setColor('#39ff14'))
+    saveBtn.on('pointerdown', () => this._save())
 
-    saveBtn.on('pointerover', () => saveBtn.setColor('#ffffff'))
-    saveBtn.on('pointerout', () => saveBtn.setColor('#39ff14'))
-    saveBtn.on('pointerdown', () => this._saveScore())
-
-    const menuBtn = this.add.text(width / 2 + 80, height * 0.9, 'MENU', {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 3}px`,
-      color: '#ff2d78',
-      backgroundColor: '#110000',
-      padding: { x: S * 2, y: S }
+    const menuBtn = this.add.text(gw/2 + 36, gh*0.92, 'MENU', {
+      fontFamily: "'Press Start 2P'", fontSize: '7px', color: '#ff2d78',
+      backgroundColor: '#110000', padding: { x: 4, y: 2 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true })
-
-    menuBtn.on('pointerover', () => menuBtn.setColor('#ffffff'))
-    menuBtn.on('pointerout', () => menuBtn.setColor('#ff2d78'))
-    menuBtn.on('pointerdown', () => {
-      audio.playMenuBeep(330)
-      this.scene.start('MenuScene')
-    })
+    menuBtn.on('pointerover', () => menuBtn.setColor('#fff'))
+    menuBtn.on('pointerout',  () => menuBtn.setColor('#ff2d78'))
+    menuBtn.on('pointerdown', () => { audio.playMenuBeep(330); this.scene.start('MenuScene') })
 
     this._btnContainer.add([saveBtn, menuBtn])
   }
 
-  _onKey(event) {
+  _onKey(e) {
     if (this.phase !== 'entry') return
-    const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_'
-    const { width, height } = this.scale
-    const S = 4
-
-    let ch = this.initials[this.cursorPos]
-    const idx = LETTERS.indexOf(ch)
-
-    switch (event.key) {
+    const idx = LETTERS.indexOf(this.initials[this.cursorPos])
+    const gw = GAME_W, gh = GAME_H
+    switch (e.key) {
       case 'ArrowUp':
-        this.initials[this.cursorPos] = LETTERS[(idx + 1) % LETTERS.length]
-        audio.playMenuBeep(500)
-        this._createInitialEntry(width, height, S)
-        break
+        this.initials[this.cursorPos] = LETTERS[(idx+1) % LETTERS.length]
+        audio.playMenuBeep(500); this._drawInitials(); break
       case 'ArrowDown':
-        this.initials[this.cursorPos] = LETTERS[(idx - 1 + LETTERS.length) % LETTERS.length]
-        audio.playMenuBeep(400)
-        this._createInitialEntry(width, height, S)
+        this.initials[this.cursorPos] = LETTERS[(idx-1+LETTERS.length) % LETTERS.length]
+        audio.playMenuBeep(400); this._drawInitials(); break
+      case 'ArrowRight': case 'Tab':
+        if (this.cursorPos < 2) { this.cursorPos++; audio.playMenuBeep(440); this._drawInitials() }
+        else this._save()
         break
-      case 'ArrowRight':
-      case 'Tab':
-      case 'Enter':
-        if (this.cursorPos < 2) {
-          this.cursorPos++
-          audio.playMenuBeep(440)
-          this._createInitialEntry(width, height, S)
-        } else {
-          this._saveScore()
-        }
-        break
+      case 'Enter': this._save(); break
       case 'ArrowLeft':
-        if (this.cursorPos > 0) {
-          this.cursorPos--
-          audio.playMenuBeep(440)
-          this._createInitialEntry(width, height, S)
-        }
+        if (this.cursorPos > 0) { this.cursorPos--; audio.playMenuBeep(440); this._drawInitials() }
         break
     }
   }
 
-  _saveScore() {
+  _save() {
     if (this.phase === 'saved') return
     this.phase = 'saved'
-    const initials = this.initials.join('')
-    Leaderboard.save(initials, this.score, this.levelId, this.tricks)
+    const ini = this.initials.join('')
+    Leaderboard.save(ini, this.score, this.levelId, this.tricks)
     audio.playLevelUp()
-
-    const { width, height } = this.scale
-    const S = 4
-
-    if (this._initialsContainer) this._initialsContainer.destroy()
-
-    const saved = this.add.text(width / 2, height * 0.72, `${initials} - SAVED!`, {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 4}px`,
-      color: '#39ff14',
-      stroke: '#000000',
-      strokeThickness: S
-    }).setOrigin(0.5).setAlpha(0)
-
-    this.tweens.add({
-      targets: saved,
-      alpha: 1,
-      y: height * 0.69,
-      duration: 300,
-      ease: 'Back.Out'
-    })
-
-    // Show leaderboard after save
-    this.time.delayedCall(1500, () => {
-      this.scene.start('LeaderboardScene', { fromGame: true })
-    })
+    if (this._initContainer) this._initContainer.destroy()
+    this.add.text(GAME_W/2, GAME_H*0.76, ini + ' - SAVED!', {
+      fontFamily: "'Press Start 2P'", fontSize: '9px', color: '#39ff14',
+      stroke: '#000', strokeThickness: 2
+    }).setOrigin(0.5)
+    this.time.delayedCall(1200, () => this.scene.start('LeaderboardScene', { fromGame: true }))
   }
 
-  _addStars(w, h) {
+  _stars() {
     const g = this.add.graphics()
-    for (let i = 0; i < 60; i++) {
-      const x = Math.random() * w, y = Math.random() * h
-      g.fillStyle(0xffffff, Math.random() * 0.4 + 0.1)
-      g.fillRect(Math.floor(x / 4) * 4, Math.floor(y / 4) * 4, 4, 4)
+    for (let i = 0; i < 50; i++) {
+      g.fillStyle(0xffffff, Math.random() * 0.3 + 0.05)
+      g.fillRect(Math.floor(Math.random() * GAME_W), Math.floor(Math.random() * GAME_H), 1, 1)
     }
   }
 }

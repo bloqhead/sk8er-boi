@@ -1,209 +1,146 @@
 import { audio } from '../audio/AudioManager.js'
 import { LEVELS } from '../data/levels.js'
+import { GAME_W, GAME_H } from '../main.js'
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
     super('MenuScene')
     this.selectedLevel = 0
-    this.menuIndex = 0
+    this.menuIndex     = 0
   }
 
   create() {
-    const { width, height } = this.scale
-    const S = 4
+    const gw = GAME_W, gh = GAME_H
     audio.resume()
 
-    // Background
-    this.add.rectangle(0, 0, width, height, 0x0a0a0f).setOrigin(0)
+    // Sky gradient background
+    const bg = this.add.graphics()
+    bg.fillGradientStyle(0x0a0a1a, 0x0a0a1a, 0x0d1b3e, 0x0d1b3e, 1)
+    bg.fillRect(0, 0, gw, gh)
 
-    // Animated background stars
-    this._addStars(width, height)
+    // Stars
+    for (let i = 0; i < 60; i++) {
+      const g = this.add.graphics()
+      g.fillStyle(0xffffff, Math.random() * 0.5 + 0.1)
+      g.fillRect(Math.floor(Math.random() * gw), Math.floor(Math.random() * gh * 0.7), 1, 1)
+    }
+
+    // Ground strip
+    this.add.rectangle(0, gh - 40, gw, 40, 0x1a1a2e).setOrigin(0)
+    this.add.rectangle(0, gh - 40, gw, 2,  0x333355).setOrigin(0)
 
     // Title
-    const title = this.add.text(width / 2, height * 0.14, 'SK8ER BOI', {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 9}px`,
-      color: '#f5e642',
-      stroke: '#000000',
-      strokeThickness: S * 3,
-      shadow: { offsetX: S * 2, offsetY: S * 2, color: '#ff2d78', blur: 0, fill: true }
+    const title = this.add.text(gw / 2, gh * 0.14, 'SK8ER BOI', {
+      fontFamily: "'Press Start 2P'", fontSize: '22px', color: '#f5e642',
+      stroke: '#000000', strokeThickness: 5,
+      shadow: { offsetX: 3, offsetY: 3, color: '#ff2d78', blur: 0, fill: true }
     }).setOrigin(0.5)
 
     this.tweens.add({
-      targets: title,
-      y: height * 0.14 - S * 2,
-      duration: 800,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.InOut'
+      targets: title, y: gh * 0.14 - 2,
+      duration: 900, yoyo: true, repeat: -1, ease: 'Sine.InOut'
     })
 
-    // Subtitle
-    this.add.text(width / 2, height * 0.26, '"SKATE OR BAIL"', {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 2}px`,
-      color: '#ff2d78'
+    this.add.text(gw / 2, gh * 0.25, '"SKATE OR BAIL"', {
+      fontFamily: "'Press Start 2P'", fontSize: '5px', color: '#ff2d78'
     }).setOrigin(0.5)
 
-    // Mini skater sprite
-    const skater = this.add.image(width / 2, height * 0.37, 'skater_idle')
-      .setScale(1.5)
+    // Idle skater sprite
+    const skater = this.add.image(gw / 2, gh * 0.38, 'skater', 'roll_a')
     this.tweens.add({
-      targets: skater,
-      y: height * 0.37 - S * 3,
-      duration: 400,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Bounce.Out'
+      targets: skater, y: gh * 0.38 - 3,
+      duration: 350, yoyo: true, repeat: -1, ease: 'Bounce.Out'
     })
+    // Bob between frames
+    this.time.addEvent({ delay: 180, loop: true, callback: () => {
+      const f = skater.frame.name === 'roll_a' ? 'roll_b' : 'roll_a'
+      skater.setFrame(f)
+    }})
 
     // Level select
-    this.add.text(width / 2, height * 0.5, 'SELECT LEVEL', {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 3}px`,
-      color: '#00f5ff'
+    this.add.text(gw / 2, gh * 0.50, 'SELECT LEVEL', {
+      fontFamily: "'Press Start 2P'", fontSize: '6px', color: '#00f5ff'
     }).setOrigin(0.5)
 
-    this._drawLevelSelect(width, height, S)
+    this._levelContainer = null
+    this._drawLevels()
 
-    // Menu options
-    const menuItems = [
-      { label: 'START GAME', action: () => this._startGame() },
+    // Menu items
+    const items = [
+      { label: 'START GAME',  action: () => this._start() },
       { label: 'LEADERBOARD', action: () => this.scene.start('LeaderboardScene') }
     ]
-
-    this.menuTexts = menuItems.map((item, i) => {
-      const t = this.add.text(width / 2, height * 0.79 + i * S * 7, item.label, {
-        fontFamily: "'Press Start 2P'",
-        fontSize: `${S * 3}px`,
-        color: i === this.menuIndex ? '#f5e642' : '#888888'
-      }).setOrigin(0.5)
-      t.setInteractive({ useHandCursor: true })
-      t.on('pointerover', () => {
-        this.menuIndex = i
-        this._updateMenuCursor()
-        audio.playMenuBeep(440)
-      })
-      t.on('pointerdown', () => {
-        audio.playMenuBeep(660)
-        item.action()
-      })
+    this.menuTexts = items.map((item, i) => {
+      const t = this.add.text(gw / 2, gh * 0.76 + i * 16, item.label, {
+        fontFamily: "'Press Start 2P'", fontSize: '7px',
+        color: i === this.menuIndex ? '#f5e642' : '#666666'
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true })
+      t.on('pointerover', () => { this.menuIndex = i; this._updateCursor(); audio.playMenuBeep(440) })
+      t.on('pointerdown', () => { audio.playMenuBeep(660); item.action() })
       return t
     })
 
-    this._cursor = this.add.text(0, 0, '>', {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 3}px`,
-      color: '#f5e642'
+    this._cursorTxt = this.add.text(0, 0, '▶', {
+      fontFamily: "'Press Start 2P'", fontSize: '7px', color: '#f5e642'
     })
-    this._updateMenuCursor()
+    this._updateCursor()
 
     // Controls hint
-    this.add.text(width / 2, height * 0.93, '← → CHANGE LEVEL    ↑/SPACE JUMP    ← → SPEED', {
-      fontFamily: "'Press Start 2P'",
-      fontSize: `${S * 1.2}px`,
-      color: '#444'
-    }).setOrigin(0.5)
+    this.add.text(gw / 2, gh - 6, '← → SPEED   ↑/SPACE OLLIE', {
+      fontFamily: "'Press Start 2P'", fontSize: '4px', color: '#333355'
+    }).setOrigin(0.5, 1)
 
-    // Keyboard nav
-    this.input.keyboard.on('keydown-UP', () => {
-      this.menuIndex = Math.max(0, this.menuIndex - 1)
-      this._updateMenuCursor()
-      audio.playMenuBeep(400)
-    })
-    this.input.keyboard.on('keydown-DOWN', () => {
-      this.menuIndex = Math.min(menuItems.length - 1, this.menuIndex + 1)
-      this._updateMenuCursor()
-      audio.playMenuBeep(400)
-    })
-    this.input.keyboard.on('keydown-ENTER', () => {
-      audio.playMenuBeep(660)
-      menuItems[this.menuIndex].action()
-    })
-    this.input.keyboard.on('keydown-SPACE', () => {
-      audio.playMenuBeep(660)
-      menuItems[this.menuIndex].action()
-    })
-    this.input.keyboard.on('keydown-LEFT', () => {
-      this.selectedLevel = Math.max(0, this.selectedLevel - 1)
-      this._drawLevelSelect(width, height, S)
-      audio.playMenuBeep(330)
-    })
-    this.input.keyboard.on('keydown-RIGHT', () => {
-      this.selectedLevel = Math.min(LEVELS.length - 1, this.selectedLevel + 1)
-      this._drawLevelSelect(width, height, S)
-      audio.playMenuBeep(370)
-    })
+    // Keyboard
+    this.input.keyboard.on('keydown-UP',    () => { this.menuIndex = Math.max(0, this.menuIndex-1); this._updateCursor(); audio.playMenuBeep(400) })
+    this.input.keyboard.on('keydown-DOWN',  () => { this.menuIndex = Math.min(items.length-1, this.menuIndex+1); this._updateCursor(); audio.playMenuBeep(400) })
+    this.input.keyboard.on('keydown-ENTER', () => { audio.playMenuBeep(660); items[this.menuIndex].action() })
+    this.input.keyboard.on('keydown-SPACE', () => { audio.playMenuBeep(660); items[this.menuIndex].action() })
+    this.input.keyboard.on('keydown-LEFT',  () => { this.selectedLevel = Math.max(0, this.selectedLevel-1); this._drawLevels(); audio.playMenuBeep(330) })
+    this.input.keyboard.on('keydown-RIGHT', () => { this.selectedLevel = Math.min(LEVELS.length-1, this.selectedLevel+1); this._drawLevels(); audio.playMenuBeep(370) })
   }
 
-  _addStars(w, h) {
-    const g = this.add.graphics()
-    g.setDepth(-1)
-    for (let i = 0; i < 60; i++) {
-      const x = Math.random() * w
-      const y = Math.random() * h * 0.6
-      const size = Math.random() < 0.2 ? 2 : 1
-      g.fillStyle(Math.random() > 0.5 ? 0xffffff : 0x9999cc, Math.random() * 0.5 + 0.2)
-      g.fillRect(Math.floor(x / 4) * 4, Math.floor(y / 4) * 4, size * 4, size * 4)
-    }
-  }
-
-  _drawLevelSelect(width, height, S) {
+  _drawLevels() {
     if (this._levelContainer) this._levelContainer.destroy()
     this._levelContainer = this.add.container(0, 0)
 
+    const gw = GAME_W, gh = GAME_H
     const levels = LEVELS
-    const boxW = Math.min(120, (width - 40) / levels.length)
-    const boxH = 60
-    const totalW = boxW * levels.length + (levels.length - 1) * S
-    const startX = (width - totalW) / 2
+    const bw = Math.floor((gw - 20) / levels.length) - 3
+    const bh = 24
+    const totalW = levels.length * (bw + 3) - 3
+    const sx = (gw - totalW) / 2
 
     levels.forEach((lv, i) => {
-      const bx = startX + i * (boxW + S)
-      const by = height * 0.56
+      const bx = sx + i * (bw + 3)
+      const by = gh * 0.56
+      const sel = i === this.selectedLevel
 
-      // Box
-      const isSelected = i === this.selectedLevel
-      const bg = this.add.rectangle(bx, by, boxW, boxH, isSelected ? 0x222244 : 0x111122)
-        .setOrigin(0, 0)
-        .setStrokeStyle(S / 2, isSelected ? 0xf5e642 : 0x333366)
+      const box = this.add.rectangle(bx, by, bw, bh, sel ? 0x111133 : 0x0a0a1a)
+        .setOrigin(0).setStrokeStyle(sel ? 1.5 : 0.5, sel ? 0xf5e642 : 0x333366)
+        .setInteractive({ useHandCursor: true })
+      box.on('pointerdown', () => { this.selectedLevel = i; this._drawLevels(); audio.playMenuBeep(440) })
 
-      // Level name
-      const name = this.add.text(bx + boxW / 2, by + 14, lv.name, {
-        fontFamily: "'Press Start 2P'",
-        fontSize: `${S * 1.5}px`,
-        color: isSelected ? '#f5e642' : '#888888',
-        wordWrap: { width: boxW - 8 }
+      const name = this.add.text(bx + bw/2, by + 7, lv.name, {
+        fontFamily: "'Press Start 2P'", fontSize: '4px',
+        color: sel ? '#f5e642' : '#666666', wordWrap: { width: bw - 4 }
       }).setOrigin(0.5, 0)
 
-      const sub = this.add.text(bx + boxW / 2, by + 35, lv.subtitle, {
-        fontFamily: "'Press Start 2P'",
-        fontSize: `${S * 1}px`,
-        color: isSelected ? '#aaaaaa' : '#555555',
-        wordWrap: { width: boxW - 8 }
+      const sub = this.add.text(bx + bw/2, by + 15, lv.subtitle, {
+        fontFamily: "'Press Start 2P'", fontSize: '3px',
+        color: sel ? '#aaaaaa' : '#444444', wordWrap: { width: bw - 4 }
       }).setOrigin(0.5, 0)
 
-      bg.setInteractive({ useHandCursor: true })
-      bg.on('pointerdown', () => {
-        this.selectedLevel = i
-        this._drawLevelSelect(width, height, S)
-        audio.playMenuBeep(440)
-      })
-
-      this._levelContainer.add([bg, name, sub])
+      this._levelContainer.add([box, name, sub])
     })
   }
 
-  _updateMenuCursor() {
-    const { width, height } = this.scale
-    const S = 4
-    this._cursor.setPosition(width / 2 - 100, height * 0.79 + this.menuIndex * S * 7 - S / 2)
-    this.menuTexts.forEach((t, i) => {
-      t.setColor(i === this.menuIndex ? '#f5e642' : '#888888')
-    })
+  _updateCursor() {
+    const gw = GAME_W, gh = GAME_H
+    this._cursorTxt.setPosition(gw / 2 - 72, gh * 0.76 + this.menuIndex * 16 - 1)
+    this.menuTexts.forEach((t, i) => t.setColor(i === this.menuIndex ? '#f5e642' : '#666666'))
   }
 
-  _startGame() {
+  _start() {
     this.scene.start('GameScene', { levelId: LEVELS[this.selectedLevel].id })
     this.scene.launch('HUDScene')
   }
