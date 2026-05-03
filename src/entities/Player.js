@@ -18,8 +18,7 @@ export class Player {
     this.scene           = scene
     this.state           = STATE.ROLLING
     this.chargeTime      = 0
-    this._jumpWasDown    = false   // keyboard/gamepad held last frame
-    this._domWasDown     = false   // DOM button held last frame (separate tracker)
+    this._jumpHeld       = false   // unified "button was held last frame" for edge detection
     this.invincibleTimer = 0
     this.lives           = GAME_CONSTANTS.LIVES
     this.score           = 0
@@ -93,20 +92,16 @@ export class Player {
       this.sprite.x = Phaser.Math.Linear(this.sprite.x, this._targetX, lerpT)
     }
 
-    // ── Input — edge detect jump for BOTH keyboard and DOM button ─────
-    const kbJumpDown  = this.keys.up.isDown || this.keys.space.isDown
-    const domJumpDown = !!window._sk8_ollie
+    // ── Unified jump edge detection ───────────────────────────────────
+    // Treat keyboard and DOM button as one logical button.
+    // "held" = either source is currently active.
+    // We track whether WE decided it was "down" last frame via _jumpHeld.
+    const kbDown  = this.keys.up.isDown || this.keys.space.isDown
+    const domDown = !!window._sk8_ollie
+    const jumpHeld = kbDown || domDown
 
-    // "jumpDown" = either source currently held
-    const jumpDown = kbJumpDown || domJumpDown
-
-    // "jumpJustPressed" = fresh press this frame from either source
-    const jumpJustPressed = (kbJumpDown  && !this._jumpWasDown) ||
-                            (domJumpDown && !this._domWasDown)
-
-    // "jumpJustReleased" = was held last frame, not held now
-    const jumpJustReleased = (this._jumpWasDown  && !kbJumpDown) ||
-                             (this._domWasDown   && !domJumpDown)
+    const jumpJustPressed  = jumpHeld  && !this._jumpHeld   // low→high edge
+    const jumpJustReleased = !jumpHeld && this._jumpHeld    // high→low edge
 
     const slowDown = this.keys.left.isDown  || !!window._sk8_slow
     const speedUp  = this.keys.right.isDown || !!window._sk8_fast
@@ -114,7 +109,6 @@ export class Player {
     // ── Airborne: board trick + air movement (NO sprite rotation) ────
     if (this.state === STATE.AIRBORNE) {
       this.airTime += delta
-      // Body stays upright — no sprite.rotation
 
       if (slowDown) {
         const newX = Math.max(20, this.sprite.x - AIR_MOVE_SPEED * (delta / 1000))
@@ -124,7 +118,6 @@ export class Player {
         this.sprite.x = newX; this._targetX = newX
       }
 
-      // Trigger random trick at apex (200ms into air)
       if (!this._trickDone && this.airTime > 200 && Math.random() < 0.003 * delta) {
         this._doMidAirTrick()
       }
@@ -136,15 +129,14 @@ export class Player {
 
     switch (this.state) {
       case STATE.ROLLING:  this._handleRolling(delta, jumpJustPressed, slowDown, speedUp); break
-      case STATE.CHARGING: this._handleCharging(delta, jumpDown, jumpJustReleased); break
+      case STATE.CHARGING: this._handleCharging(delta, jumpJustReleased); break
       case STATE.AIRBORNE: this._handleAirborne(); break
       case STATE.GRINDING: this._handleGrinding(delta, jumpJustPressed); break
       case STATE.CRASHED:  this._handleCrashed(delta); break
     }
 
-    // Store for next frame's edge detection
-    this._jumpWasDown = kbJumpDown
-    this._domWasDown  = domJumpDown
+    // Store unified state for next frame
+    this._jumpHeld = jumpHeld
 
     if (this.sprite.y > this.scene.scale.height + 60) this.crash()
     this.animator.update(this.state, delta, gameSpeed)
@@ -163,32 +155,32 @@ export class Player {
     else if (speedUp) this.scene.increaseSpeed()
   }
 
-  _handleCharging(dt, jumpDown, jumpJustReleased) {
+  _handleCharging(dt, jumpJustReleased) {
     this.chargeTime += dt
     const maxed = this.chargeTime >= GAME_CONSTANTS.JUMP_CHARGE_TIME * 1.5
     if (jumpJustReleased || maxed) this._launch()
   }
 
   _launch() {
-    const pct   = this.chargePercent
-    const power = Phaser.Math.Linear(GAME_CONSTANTS.JUMP_POWER_MIN, GAME_CONSTANTS.JUMP_POWER_MAX, pct)
-    this.sprite.body.setVelocityY(power)
-    this.state  = STATE.AIRBORNE
+    const pct      = this.chargePercent
+    const power    = Phaser.Math.Linear(GAME_CONSTANTS.JUMP_POWER_MIN, GAME_CONSTANTS.JUMP_POWER_MAX, pct)
+    const trickIdx = Math.min(Math.floor(pct * TRICK_NAMES.length), TRICK_NAMES.length - 1)
+    const trickName = TRICK_NAMES[trickIdx]
+    const airDur   = 400 + pct * 400
 
-    // Pick trick based on charge — higher charge = fancier trick
-    const trickIdx   = Math.min(Math.floor(pct * TRICK_NAMES.length), TRICK_NAMES.length - 1)
-    const trickName  = TRICK_NAMES[trickIdx]
-    const airTime    = 400 + pct * 400  // estimated air time for trick timing
-    this.animator.startTrick(trickName, airTime)
+    this.sprite.body.setVelocityY(power)
+    this.state = STATE.AIRBORNE
+    this.chargeTime = 0
     this._currentTrickName = trickName
+
+    // Reset animation state cleanly, then start trick
+    this.animator.forceReset()
+    this.animator.startTrick(trickName, airDur)
 
     this.scene.particles.spawnOllieParticles(this.x, this.y + 12, pct)
     audio.playOllie(pct)
     this.score += GAME_CONSTANTS.SCORE_OLLIE
     this.scene.events.emit('score-update', this.score)
-    this.chargeTime = 0
-    this.animator.forceReset()
-    this.animator.startTrick(trickName, airTime)  // re-start after forceReset
   }
 
   _handleAirborne() {
