@@ -32,6 +32,12 @@ export class GameScene extends Phaser.Scene {
   create() {
     audio.resume()
 
+    // Show arcade panel for touch devices during gameplay
+    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0
+    const panel   = document.getElementById('arcade-panel')
+    if (panel && isTouch) panel.style.display = 'block'
+    else if (panel) panel.style.display = 'none'
+
     // Terrain first — provides groundY
     this.terrain = new TerrainSystem(this, this.levelId)
     this.groundY = this.terrain.currentY

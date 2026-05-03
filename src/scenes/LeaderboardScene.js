@@ -6,6 +6,8 @@ export class LeaderboardScene extends Phaser.Scene {
   constructor() { super('LeaderboardScene') }
 
   create() {
+    // Hide arcade panel on non-game screens
+    const _p = document.getElementById('arcade-panel'); if (_p) _p.style.display = 'none'
     this._build()
     this.scale.on('resize', () => { this.children.removeAll(true); this._build() })
   }
