@@ -26,7 +26,7 @@ export class GameOverScene extends Phaser.Scene {
 
   create() {
     // Hide arcade panel on non-game screens
-    const _p = document.getElementById('arcade-panel'); if (_p) _p.style.display = 'none'
+    const _p = document.getElementById('arcade-panel'); if (_p) _p.style.display = 'none'; if (window._sk8_resizeGame) window._sk8_resizeGame()
     this._build()
     this.scale.on('resize', () => { this.children.removeAll(true); this._build() })
   }

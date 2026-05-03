@@ -37,6 +37,8 @@ export class GameScene extends Phaser.Scene {
     const panel   = document.getElementById('arcade-panel')
     if (panel && isTouch) panel.style.display = 'block'
     else if (panel) panel.style.display = 'none'
+    // Resize canvas now that panel height is set
+    if (window._sk8_resizeGame) window._sk8_resizeGame()
 
     // Terrain first — provides groundY
     this.terrain = new TerrainSystem(this, this.levelId)

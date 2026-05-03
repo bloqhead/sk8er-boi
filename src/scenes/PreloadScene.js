@@ -10,6 +10,7 @@ export class PreloadScene extends Phaser.Scene {
     // Always hide arcade panel on loading screen
     const panel = document.getElementById('arcade-panel')
     if (panel) panel.style.display = 'none'
+    if (window._sk8_resizeGame) window._sk8_resizeGame()
 
     const { W, H, font, u } = layout(this)
 

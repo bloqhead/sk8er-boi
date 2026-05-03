@@ -7,49 +7,66 @@ import { HUDScene }             from './scenes/HUDScene.js'
 import { LeaderboardScene }     from './scenes/LeaderboardScene.js'
 import { GameOverScene }        from './scenes/GameOverScene.js'
 import { LevelTransitionScene } from './scenes/LevelTransitionScene.js'
-import { PauseScene }          from './scenes/PauseScene.js'
+import { PauseScene }           from './scenes/PauseScene.js'
 
-// RESIZE mode: canvas always fills the full viewport, no black bars.
-// Scenes use this.scale.width / this.scale.height for all layout.
-// Base unit: 1px in game = 1 real CSS pixel at 1× DPR.
-// On mobile portrait a 390×844 phone gets a 390×844 game canvas.
+// ── Canvas sizing ─────────────────────────────────────────────────────────
+// The arcade panel is a DOM flex sibling below the canvas container.
+// We must subtract its height so the canvas doesn't extend under it.
+function getCanvasHeight() {
+  const panel = document.getElementById('arcade-panel')
+  const panelH = (panel && panel.offsetHeight > 0) ? panel.offsetHeight : 0
+  return window.innerHeight - panelH
+}
+
+function getCanvasWidth() {
+  return window.innerWidth
+}
+
 const config = {
-  type: Phaser.AUTO,
-  parent: 'game-container',
+  type:            Phaser.AUTO,
+  parent:          'game-container',
   backgroundColor: '#0a0a0f',
   scale: {
     mode:       Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.NO_CENTER,
-    width:  window.innerWidth,
-    height: window.innerHeight,
+    width:      getCanvasWidth(),
+    height:     getCanvasHeight(),
   },
   physics: {
     default: 'arcade',
-    arcade: {
-      gravity: { y: 800 },
-      debug: false,
-    },
+    arcade: { gravity: { y: 800 }, debug: false },
   },
   render: {
-    pixelArt:      true,
-    antialias:     false,
-    antialiasGL:   false,
-    roundPixels:   true,
+    pixelArt:        true,
+    antialias:       false,
+    antialiasGL:     false,
+    roundPixels:     true,
     powerPreference: 'high-performance',
   },
   input: { activePointers: 4 },
   scene: [
-    BootScene,
-    PreloadScene,
-    MenuScene,
-    GameScene,
-    HUDScene,
-    LeaderboardScene,
-    GameOverScene,
-    LevelTransitionScene,
-    PauseScene,
+    BootScene, PreloadScene, MenuScene,
+    GameScene, HUDScene,
+    LeaderboardScene, GameOverScene,
+    LevelTransitionScene, PauseScene,
   ],
 }
 
 const game = new Phaser.Game(config)
+
+// Resize handler — called whenever the panel appears/disappears
+// or the browser viewport changes (rotation, resize, keyboard up/down)
+function resizeGame() {
+  const w = getCanvasWidth()
+  const h = getCanvasHeight()
+  game.scale.resize(w, h)
+}
+
+window.addEventListener('resize', resizeGame)
+
+// Also expose so GameScene / MenuScene can trigger a resize when
+// they show/hide the arcade panel
+window._sk8_resizeGame = resizeGame
+
 export default game
+export { getCanvasWidth, getCanvasHeight }

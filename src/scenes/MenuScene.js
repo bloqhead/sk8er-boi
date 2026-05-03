@@ -13,6 +13,7 @@ export class MenuScene extends Phaser.Scene {
     audio.resume()
     const panel = document.getElementById('arcade-panel')
     if (panel) panel.style.display = 'none'
+    if (window._sk8_resizeGame) window._sk8_resizeGame()
     this._build()
     this.scale.on('resize', () => { this.children.removeAll(true); this._build() })
   }
@@ -181,8 +182,14 @@ export class MenuScene extends Phaser.Scene {
     if (this._levelContainer) this._levelContainer.destroy()
     this._levelContainer = this.add.container(0, 0)
 
-    const { W } = { W: this.scale.width }
-    const { bw, bh, cols, nameFs, subFs, gapX, gapY } = this
+    const W    = this.scale.width
+    const bw   = this._bw, bh = this._bh, cols = this._cols
+    const nameFs = this._nameFs, subFs = this._subFs
+    const gapX = this._gapX, gapY = this._gapY
+
+    // Guard: if _build() hasn't run yet, bail silently
+    if (!bw || !cols) return
+
     const totalW = cols * bw + (cols - 1) * gapX
     const sx     = (W - totalW) / 2
 
@@ -224,6 +231,8 @@ export class MenuScene extends Phaser.Scene {
     const panel   = document.getElementById('arcade-panel')
     if (panel && isTouch) panel.style.display = 'block'
     else if (panel)       panel.style.display = 'none'
+    // Resize canvas to account for panel height change before scene starts
+    if (window._sk8_resizeGame) window._sk8_resizeGame()
     this.scene.start('GameScene', { levelId: LEVELS[this.selectedLevel].id })
     this.scene.launch('HUDScene')
   }

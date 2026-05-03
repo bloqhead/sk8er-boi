@@ -6,7 +6,7 @@ export class PauseScene extends Phaser.Scene {
 
   create() {
     // Hide arcade panel on non-game screens
-    const _p = document.getElementById('arcade-panel'); if (_p) _p.style.display = 'none'
+    const _p = document.getElementById('arcade-panel'); if (_p) _p.style.display = 'none'; if (window._sk8_resizeGame) window._sk8_resizeGame()
     const { W, H, u, font } = layout(this)
 
     // Semi-transparent overlay
