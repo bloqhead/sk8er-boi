@@ -4,26 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>SK8ER BOI</title>
+
+  <!-- Preconnect so fonts load as fast as possible -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20,400,1,0" rel="stylesheet" />
+
+  <!-- Load both fonts in a single request, display=block so we wait for them -->
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20,400,1,0&display=block" rel="stylesheet" />
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --pixel-bg: #0a0a0f;
-      --neon-yellow: #f5e642;
-      --neon-pink: #ff2d78;
-      --neon-cyan: #00f5ff;
-      --neon-green: #39ff14;
-    }
-
     html, body {
-      width: 100%;
-      height: 100%;
-      /* Fill safe area on notched phones */
-      height: 100dvh;
+      width: 100%; height: 100%; height: 100dvh;
       overflow: hidden;
       background: #000;
       touch-action: none;
@@ -32,31 +25,180 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    #game-container {
+    /* Outer wrapper — splits canvas area from arcade panel */
+    #game-wrapper {
       position: fixed;
       inset: 0;
-      width: 100%;
-      height: 100%;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      flex-direction: column;
       background: #000;
     }
 
-    /* Phaser canvas — always fills container, pixel-perfect */
+    /* Canvas lives here — grows to fill remaining space above the panel */
+    #game-container {
+      flex: 1 1 auto;
+      position: relative;
+      overflow: hidden;
+      min-height: 0;
+    }
+
     #game-container canvas {
       display: block;
-      /* Let Phaser control exact dimensions */
+      width: 100% !important;
+      height: 100% !important;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
-      /* Prevent canvas from causing scrollbars */
-      max-width: 100%;
-      max-height: 100%;
+    }
+
+    /* ── Arcade control panel ────────────────────────────────────────── */
+    #arcade-panel {
+      flex: 0 0 auto;
+      display: none;          /* shown via JS when touch device detected */
+      background: linear-gradient(180deg, #1a1014 0%, #0d080a 60%, #080508 100%);
+      border-top: 3px solid #3a1a22;
+      box-shadow: inset 0 4px 12px rgba(0,0,0,0.8), 0 -2px 6px rgba(255,45,120,0.15);
+      padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+      position: relative;
+    }
+
+    /* Decorative top edge line — like an arcade cab bezel */
+    #arcade-panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #ff2d78 20%, #f5e642 50%, #ff2d78 80%, transparent);
+      opacity: 0.6;
+    }
+
+    .panel-buttons {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 16px;
+      gap: 8px;
+    }
+
+    /* Individual arcade button */
+    .arc-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .arc-btn-face {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Material Symbols Rounded', sans-serif;
+      font-size: 26px;
+      color: #fff;
+      border: 3px solid rgba(255,255,255,0.15);
+      box-shadow:
+        0 4px 0 rgba(0,0,0,0.6),
+        inset 0 1px 0 rgba(255,255,255,0.15),
+        0 0 12px rgba(0,0,0,0.4);
+      transition: transform 60ms, box-shadow 60ms;
+      cursor: pointer;
+    }
+
+    .arc-btn-face:active,
+    .arc-btn-face.pressed {
+      transform: translateY(3px);
+      box-shadow:
+        0 1px 0 rgba(0,0,0,0.6),
+        inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+
+    .arc-btn-face.btn-slow  { background: radial-gradient(circle at 35% 35%, #2a55ee, #0a1888); }
+    .arc-btn-face.btn-ollie { background: radial-gradient(circle at 35% 35%, #ee2060, #880020); width: 68px; height: 68px; font-size: 30px; }
+    .arc-btn-face.btn-fast  { background: radial-gradient(circle at 35% 35%, #2a55ee, #0a1888); }
+
+    .arc-btn-label {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      color: #888;
+      letter-spacing: 0.5px;
+    }
+
+    /* Panel screw decorations */
+    .panel-screws {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 8px 0;
+    }
+    .screw {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #555, #222);
+      border: 1px solid #333;
     }
   </style>
 </head>
 <body>
-  <div id="game-container"></div>
+  <div id="game-wrapper">
+    <div id="game-container"></div>
+
+    <!-- Arcade panel — only shown on touch devices, populated by JS -->
+    <div id="arcade-panel">
+      <div class="panel-screws">
+        <div class="screw"></div>
+        <div class="screw"></div>
+        <div class="screw"></div>
+        <div class="screw"></div>
+      </div>
+      <div class="panel-buttons">
+        <div class="arc-btn" id="btn-slow">
+          <div class="arc-btn-face btn-slow" data-action="slow">fast_rewind</div>
+          <span class="arc-btn-label">SLOW</span>
+        </div>
+        <div class="arc-btn" id="btn-ollie">
+          <div class="arc-btn-face btn-ollie" data-action="ollie">keyboard_arrow_up</div>
+          <span class="arc-btn-label">OLLIE</span>
+        </div>
+        <div class="arc-btn" id="btn-fast">
+          <div class="arc-btn-face btn-fast" data-action="fast">fast_forward</div>
+          <span class="arc-btn-label">FAST</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Show arcade panel on touch devices before Phaser loads
+    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0
+    if (isTouch) {
+      document.getElementById('arcade-panel').style.display = 'block'
+    }
+
+    // Wire arcade buttons — set flags read by GameScene
+    // We use window flags so Phaser can read them cross-scene
+    window._sk8_slow  = false
+    window._sk8_ollie = false
+    window._sk8_fast  = false
+
+    function wireBtn(id, flagKey) {
+      const face = document.querySelector(`#${id} .arc-btn-face`)
+      if (!face) return
+      const down = () => { window[flagKey] = true;  face.classList.add('pressed') }
+      const up   = () => { window[flagKey] = false; face.classList.remove('pressed') }
+      face.addEventListener('touchstart',  down, { passive: true })
+      face.addEventListener('touchend',    up,   { passive: true })
+      face.addEventListener('touchcancel', up,   { passive: true })
+      // Mouse fallback for desktop testing
+      face.addEventListener('mousedown', down)
+      face.addEventListener('mouseup',   up)
+      face.addEventListener('mouseleave', up)
+    }
+
+    wireBtn('btn-slow',  '_sk8_slow')
+    wireBtn('btn-ollie', '_sk8_ollie')
+    wireBtn('btn-fast',  '_sk8_fast')
+  </script>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

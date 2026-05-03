@@ -88,9 +88,9 @@ export class Player {
       this.sprite.x = Phaser.Math.Linear(this.sprite.x, this._targetX, lerpT)
     }
 
-    const jumpDown = this.keys.up.isDown || this.keys.space.isDown || this.scene._mobileJump
-    const slowDown = this.keys.left.isDown  || this.scene._mobileSlowDown
-    const speedUp  = this.keys.right.isDown || this.scene._mobileSpeedUp
+    const jumpDown = this.keys.up.isDown || this.keys.space.isDown || window._sk8_ollie
+    const slowDown = this.keys.left.isDown  || window._sk8_slow
+    const speedUp  = this.keys.right.isDown || window._sk8_fast
 
     // ── Airborne: rotate + air movement ──────────────────────────────
     if (this.state === STATE.AIRBORNE) {

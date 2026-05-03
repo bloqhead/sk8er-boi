@@ -15,9 +15,6 @@ export class GameScene extends Phaser.Scene {
     this.distanceTraveled = 0
     this.levelProgress    = 0
     this.levelLength      = 6000
-    this._mobileJump      = false
-    this._mobileSlowDown  = false
-    this._mobileSpeedUp   = false
     this._gameOver        = false
   }
 
@@ -28,51 +25,40 @@ export class GameScene extends Phaser.Scene {
     this.distanceTraveled = 0
     this.levelProgress    = 0
     this._gameOver        = false
-    this._mobileJump = this._mobileSlowDown = this._mobileSpeedUp = false
+    // Reset DOM button flags
+    window._sk8_slow = window._sk8_ollie = window._sk8_fast = false
   }
 
   create() {
     audio.resume()
-    const L = layout(this)
 
-    // ── Terrain (draws ground, provides physics segments) ─────────────
+    // Terrain first — provides groundY
     this.terrain = new TerrainSystem(this, this.levelId)
     this.groundY = this.terrain.currentY
 
-    // ── Background (sky + buildings, drawn below terrain) ─────────────
+    // Background
     this.bg = new BackgroundSystem(this, this.levelId)
 
-    // ── Other systems ─────────────────────────────────────────────────
+    // Other systems
     this.particles      = new ParticleSystem(this)
     this.obstacleSystem = new ObstacleSystem(this, this.levelId)
 
-    // ── Player ────────────────────────────────────────────────────────
+    // Player
     this.player = new Player(this, 80, this.terrain.currentY - 30)
 
-    // ── Physics: player vs terrain segments ───────────────────────────
+    // Physics
     this.physics.add.collider(this.player.sprite, this.terrain.segGroup)
+    this.physics.add.overlap(this.player.sprite, this.obstacleSystem.obstacles, this._onObstacleHit, null, this)
+    this.physics.add.overlap(this.player.sprite, this.obstacleSystem.ramps,     this._onRampHit,     null, this)
+    this.physics.add.overlap(this.player.sprite, this.obstacleSystem.rails,     this._onRailHit,     null, this)
 
-    // ── Physics: player vs obstacles / ramps / rails ──────────────────
-    this.physics.add.overlap(
-      this.player.sprite, this.obstacleSystem.obstacles,
-      this._onObstacleHit, null, this,
-    )
-    this.physics.add.overlap(
-      this.player.sprite, this.obstacleSystem.ramps,
-      this._onRampHit, null, this,
-    )
-    this.physics.add.overlap(
-      this.player.sprite, this.obstacleSystem.rails,
-      this._onRailHit, null, this,
-    )
-
-    // ── Events ────────────────────────────────────────────────────────
+    // Events
     this.events.on('player-dead',  this._onPlayerDead, this)
     this.events.on('crash',        lives => this.scene.get('HUDScene')?.events.emit('lives-update', lives))
     this.events.on('score-update', score => this.scene.get('HUDScene')?.events.emit('score-update', score))
     this.events.on('trick',        name  => this.scene.get('HUDScene')?.events.emit('trick', name))
 
-    // ── HUD init ──────────────────────────────────────────────────────
+    // HUD init
     const hud = this.scene.get('HUDScene')
     if (hud) {
       hud.events.emit('level-start', this.levelData)
@@ -80,52 +66,10 @@ export class GameScene extends Phaser.Scene {
       hud.events.emit('score-update', 0)
     }
 
-    this._createTouchControls(L)
     audio.startRolling()
-    this.scale.on('resize', (sz) => this._onResize(sz))
-  }
-
-  _onResize(sz) {
-    const L = layout(this)
-    this._createTouchControls(L)
-    this.scene.get('HUDScene')?.events.emit('resize', L)
-  }
-
-  _createTouchControls(L) {
-    const { W, H, btnR, btnPad, font } = L
-    const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0
-    const showTouch = isTouchDevice || W < 800
-
-    this._touchObjs = this._touchObjs || []
-    for (const obj of this._touchObjs) { try { obj.destroy() } catch {} }
-    this._touchObjs = []
-
-    if (!showTouch) return
-
-    const cy = H - btnPad - btnR
-
-    const makeBtn = (cx, icon, label, colorHex, onDown, onUp) => {
-      const bg   = this.add.circle(cx, cy, btnR, colorHex, 0.6).setScrollFactor(0).setDepth(200)
-      const ring = this.add.circle(cx, cy, btnR, 0x000000, 0).setScrollFactor(0).setDepth(201)
-      ring.setStrokeStyle(2, 0xffffff, 0.25)
-      const iconTxt = this.add.text(cx, cy, icon, {
-        fontFamily: 'Material Symbols Rounded', fontSize: Math.max(20, btnR) + 'px', color: '#ffffff',
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(202)
-      this.add.text(cx, cy + btnR + 5, label, {
-        fontFamily: "'Press Start 2P'", fontSize: Math.max(5, font.xs) + 'px', color: '#8888aa',
-      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(202)
-      const hitZone = this.add.rectangle(cx, cy, btnR * 2.4, btnR * 2.4, 0x000000, 0)
-        .setScrollFactor(0).setDepth(203).setInteractive({ useHandCursor: false })
-      hitZone.on('pointerdown',   () => { onDown(); audio.resume(); bg.setAlpha(1.0); bg.setScale(1.12) })
-      hitZone.on('pointerup',     () => { onUp(); bg.setAlpha(0.6); bg.setScale(1) })
-      hitZone.on('pointerout',    () => { onUp(); bg.setAlpha(0.6); bg.setScale(1) })
-      hitZone.on('pointercancel', () => { onUp(); bg.setAlpha(0.6); bg.setScale(1) })
-      this._touchObjs.push(bg, ring, iconTxt, hitZone)
-    }
-
-    makeBtn(btnPad + btnR,  'fast_rewind',       'SLOW',  0x2244cc, () => { this._mobileSlowDown = true  }, () => { this._mobileSlowDown = false })
-    makeBtn(W / 2,          'keyboard_arrow_up', 'OLLIE', 0xcc1155, () => { this._mobileJump = true  },     () => { this._mobileJump = false })
-    makeBtn(W - btnPad - btnR, 'fast_forward',   'FAST',  0x2244cc, () => { this._mobileSpeedUp = true  },  () => { this._mobileSpeedUp = false })
+    this.scale.on('resize', () => {
+      this.scene.get('HUDScene')?.events.emit('resize')
+    })
   }
 
   _onObstacleHit(playerSprite, obstacle) {
@@ -162,7 +106,6 @@ export class GameScene extends Phaser.Scene {
     this.distanceTraveled += dx
     this.levelProgress    += dx
 
-    // Distance score
     const mpts = Math.floor(dx * GAME_CONSTANTS.SCORE_PER_METER)
     if (mpts > 0) {
       this.player.score += mpts
@@ -174,22 +117,19 @@ export class GameScene extends Phaser.Scene {
       this._advanceLevel()
     }
 
-    // Update all systems
     this.terrain.update(delta, this.gameSpeed)
     this.bg.update(delta, this.gameSpeed)
     this.obstacleSystem.update(delta, this.gameSpeed, this.player.x)
     this.particles.update(delta)
     this.player.update(delta, this.gameSpeed)
 
-    // Tilt player sprite to match terrain slope
+    // Tilt player on slope when grounded
     if (this.player.onGround && this.player.state !== 'crashed') {
       const slope = this.terrain.slopeAt(this.player.x)
-      this.player.sprite.rotation = Phaser.Math.Linear(
-        this.player.sprite.rotation, slope, 0.15
-      )
+      this.player.sprite.rotation = Phaser.Math.Linear(this.player.sprite.rotation, slope, 0.15)
     }
 
-    // Hard X floor
+    // X floor
     const minX = Math.max(20, this.player._baseX - 55)
     if (this.player.sprite.x < minX) {
       this.player.sprite.x = minX
@@ -202,7 +142,7 @@ export class GameScene extends Phaser.Scene {
       this.player.sprite.body.setVelocityY(Math.max(0, this.player.sprite.body.velocity.y))
     }
 
-    // HUD feeds — charge every frame so meter stays in sync
+    // HUD
     const hud = this.scene.get('HUDScene')
     if (hud) {
       hud.events.emit('speed',    this.gameSpeed)
@@ -210,7 +150,6 @@ export class GameScene extends Phaser.Scene {
       hud.events.emit('charge',   this.player.chargePercent)
     }
 
-    // Speed lines
     if (this.gameSpeed > 340) {
       this.particles.spawnSpeedLines(this.player.x + 40, this.player.y, (this.gameSpeed - 340) / 160)
     }
@@ -251,7 +190,7 @@ export class GameScene extends Phaser.Scene {
 
   shutdown() {
     audio.stopRolling()
-    this.scale.off('resize', this._onResize, this)
+    this.scale.off('resize')
     if (this.terrain)        this.terrain.destroy()
     if (this.bg)             this.bg.destroy()
     if (this.particles)      this.particles.destroy()

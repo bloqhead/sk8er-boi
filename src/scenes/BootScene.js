@@ -1,13 +1,13 @@
 export class BootScene extends Phaser.Scene {
-  constructor() {
-    super('BootScene')
-  }
-
-  preload() {
-    // Nothing to load in boot - all sprites are generated
-  }
+  constructor() { super('BootScene') }
 
   create() {
-    this.scene.start('PreloadScene')
+    // Wait for web fonts before starting — prevents fallback font flash
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => this.scene.start('PreloadScene'))
+    } else {
+      // Fallback: small delay to let fonts load
+      this.time.delayedCall(300, () => this.scene.start('PreloadScene'))
+    }
   }
 }
