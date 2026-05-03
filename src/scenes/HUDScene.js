@@ -27,23 +27,42 @@ export class HUDScene extends Phaser.Scene {
   _build() {
     const L = layout(this)
     const { W, H, u, font, groundY } = L
-    const safeBottom = groundY - u * 0.3
 
-    // ── Score (top left, pill background) ────────────────────────────
+    // ── Level progress — thin strip at very top of screen ─────────────
+    // 4px tall, full width, sits above everything else, depth 100
+    const stripH = Math.max(4, u * 0.3) | 0
+    this.add.rectangle(0, 0, W, stripH, 0x111122, 0.9).setOrigin(0).setDepth(100)
+    this._progressFg  = this.add.rectangle(0, 0, 0, stripH, 0x39ff14).setOrigin(0).setDepth(101)
+    this._progressBarW = W
+
+    // Level name — sits just below the progress strip, small
+    this._levelLabel = this.add.text(W / 2, stripH + 2, this._levelName, {
+      fontFamily: "'Press Start 2P'", fontSize: font.xs + 'px', color: '#ff2d78',
+    }).setOrigin(0.5, 0).setDepth(100)
+
+    // ── Score (top left) ──────────────────────────────────────────────
+    const scorePillH = font.sm + u * 0.7
     const scorePillW = Math.min(W * 0.52, 210)
-    this.add.rectangle(0, 0, scorePillW, font.sm + u * 0.8, 0x000000, 0.65).setOrigin(0)
-    this._scoreText = this.add.text(u * 0.4, u * 0.25, 'SCORE: ' + this.score.toLocaleString(), {
+    this.add.rectangle(0, stripH + font.xs + 4, scorePillW, scorePillH, 0x000000, 0.65)
+      .setOrigin(0).setDepth(100)
+    this._scoreText = this.add.text(u * 0.4, stripH + font.xs + 4 + u * 0.2,
+      'SCORE: ' + this.score.toLocaleString(), {
       fontFamily: "'Press Start 2P'", fontSize: font.sm + 'px', color: '#f5e642',
-    })
+    }).setDepth(100)
 
-    // ── Pause button (top right, beside hearts) ───────────────────────
-    const pauseBtn = this.add.text(W - u * 0.3, u * 0.25, '⏸', {
+    // ── Speed (top centre-right, small) ──────────────────────────────
+    this._speedText = this.add.text(W / 2, stripH + font.xs + 6, '', {
+      fontFamily: "'Press Start 2P'", fontSize: font.xs + 'px', color: '#00f5ff',
+    }).setOrigin(0.5, 0).setDepth(100)
+
+    // ── Pause button (top right) ──────────────────────────────────────
+    const pauseBtn = this.add.text(W - u * 0.3, stripH + 3, '⏸', {
       fontFamily: 'Arial',
       fontSize:   Math.max(12, u * 0.9) + 'px',
-      color:      '#888888',
-    }).setOrigin(1, 0).setInteractive({ useHandCursor: true }).setDepth(50)
+      color:      '#666688',
+    }).setOrigin(1, 0).setInteractive({ useHandCursor: true }).setDepth(102)
     pauseBtn.on('pointerover', () => pauseBtn.setColor('#ffffff'))
-    pauseBtn.on('pointerout',  () => pauseBtn.setColor('#888888'))
+    pauseBtn.on('pointerout',  () => pauseBtn.setColor('#666688'))
     pauseBtn.on('pointerdown', () => {
       const gs = this.scene.get('GameScene')
       if (gs) {
@@ -52,61 +71,38 @@ export class HUDScene extends Phaser.Scene {
         this.scene.scene.pause('HUDScene')
       }
     })
-    const hSize = Math.max(8, u * 0.7)
-    const hGap  = hSize * 1.6
+
+    // ── Lives (hearts, top right below pause) ─────────────────────────
+    const hSize = Math.max(7, u * 0.65)
+    const hGap  = hSize * 1.55
     this._hearts = []
     for (let i = 0; i < GAME_CONSTANTS.LIVES; i++) {
-      const hx = W - u * 0.4 - i * hGap
-      const h  = this.add.image(hx, u * 0.55, i < this.lives ? 'heart_full' : 'heart_empty')
-        .setOrigin(1, 0).setScale(hSize / 7)
+      const hx = W - u * 0.3 - i * hGap
+      const hy = stripH + font.xs + 6 + u * 0.2
+      const h  = this.add.image(hx, hy, i < this.lives ? 'heart_full' : 'heart_empty')
+        .setOrigin(1, 0).setScale(hSize / 7).setDepth(100)
       this._hearts.push(h)
     }
 
-    // ── Level name (top centre) ───────────────────────────────────────
-    this._levelLabel = this.add.text(W / 2, u * 0.25, this._levelName, {
-      fontFamily: "'Press Start 2P'", fontSize: font.xs + 'px', color: '#ff2d78',
-    }).setOrigin(0.5, 0)
+    // ── OLLIE CHARGE METER — arc, bottom left ─────────────────────────
+    const safeBottom = groundY - u * 0.3
+    const meterR  = Math.max(14, u * 1.2)
+    const meterX  = u * 1.0 + meterR
+    const meterY  = safeBottom - meterR - u * 0.5
 
-    this._speedText = this.add.text(W / 2, u * 0.25 + font.xs + 3, '', {
-      fontFamily: "'Press Start 2P'", fontSize: font.xs + 'px', color: '#00f5ff',
-    }).setOrigin(0.5, 0)
-
-    // ── Level progress bar (above safe zone) ──────────────────────────
-    const barH  = Math.max(4, u * 0.35)
-    const barW  = W * 0.45
-    const barX  = (W - barW) / 2
-    const barY  = safeBottom - barH / 2 - u * 0.2
-
-    this.add.text(barX, barY - barH / 2 - font.xs - 2, 'LEVEL PROGRESS', {
-      fontFamily: "'Press Start 2P'", fontSize: font.xs + 'px', color: '#333355',
-    })
-    this.add.rectangle(barX, barY, barW, barH, 0x111122).setOrigin(0, 0.5)
-    this._progressFg  = this.add.rectangle(barX, barY, 0, barH, 0x39ff14).setOrigin(0, 0.5)
-    this._progressBarW = barW
-
-    // ── OLLIE CHARGE METER — prominent arc near player ─────────────────
-    // Drawn as a circular arc around a label, lives above the progress bar
-    const meterR  = Math.max(16, u * 1.4)    // arc radius
-    const meterX  = u * 1.2 + meterR
-    const meterY  = safeBottom - meterR - barH - u * 1.8
-
-    // Background ring
-    this._chargeGfx = this.add.graphics()
+    this._chargeGfx = this.add.graphics().setDepth(100)
     this._meterX    = meterX
     this._meterY    = meterY
     this._meterR    = meterR
 
-    // "OLLIE" label below the arc
-    this.add.text(meterX, meterY + meterR + 4, 'OLLIE', {
+    this.add.text(meterX, meterY + meterR + 2, 'OLLIE', {
       fontFamily: "'Press Start 2P'", fontSize: font.xs + 'px', color: '#ff2d78',
-    }).setOrigin(0.5, 0)
+    }).setOrigin(0.5, 0).setDepth(100)
 
-    // Percentage text in centre of arc
-    this._chargePct = this.add.text(meterX, meterY, '0%', {
+    this._chargePct = this.add.text(meterX, meterY, '', {
       fontFamily: "'Press Start 2P'", fontSize: Math.max(5, font.xs) + 'px', color: '#ffffff',
-    }).setOrigin(0.5, 0.5)
+    }).setOrigin(0.5, 0.5).setDepth(100)
 
-    // Draw initial state
     this._drawChargeMeter(0)
 
     // ── Trick popup ───────────────────────────────────────────────────
@@ -116,7 +112,7 @@ export class HUDScene extends Phaser.Scene {
       color:      '#00f5ff',
       stroke:     '#000000',
       strokeThickness: Math.max(2, font.lg * 0.2),
-    }).setOrigin(0.5).setAlpha(0)
+    }).setOrigin(0.5).setAlpha(0).setDepth(100)
     this._trickY = H * 0.28
   }
 

@@ -194,37 +194,43 @@
     const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0
     if (isTouch) document.getElementById('arcade-panel').style.display = 'block'
 
-    window._sk8_slow  = false
-    window._sk8_ollie = false
-    window._sk8_fast  = false
+    window._sk8_slow       = false   // held state
+    window._sk8_ollie      = false   // held state  
+    window._sk8_fast       = false   // held state
+    // Latch counters — incremented on touchstart, consumed by game engine.
+    // Guarantees a press is never missed even if touchend fires before the next frame.
+    window._sk8_ollie_latch = 0
+    window._sk8_slow_latch  = 0
+    window._sk8_fast_latch  = 0
 
-    function wireHoldBtn(id, flagKey) {
+    function wireHoldBtn(id, heldKey, latchKey) {
       const face = document.querySelector('#' + id + ' .arc-btn-face')
       if (!face) return
+
       const down = (e) => {
-        e.preventDefault()   // blocks pinch-zoom and double-tap zoom
-        window[flagKey] = true
+        e.preventDefault()
+        window[heldKey] = true
+        if (latchKey) window[latchKey]++   // always count the press
         face.classList.add('pressed')
       }
       const up = (e) => {
         e.preventDefault()
-        window[flagKey] = false
+        window[heldKey] = false
         face.classList.remove('pressed')
       }
-      // Non-passive so preventDefault works
+
       face.addEventListener('touchstart',  down, { passive: false })
       face.addEventListener('touchend',    up,   { passive: false })
       face.addEventListener('touchcancel', up,   { passive: false })
-      // Block touchmove on buttons so scrolling doesn't interfere
-      face.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false })
-      face.addEventListener('mousedown',  down)
-      face.addEventListener('mouseup',    up)
-      face.addEventListener('mouseleave', up)
+      face.addEventListener('touchmove',   (e) => e.preventDefault(), { passive: false })
+      face.addEventListener('mousedown',   down)
+      face.addEventListener('mouseup',     up)
+      face.addEventListener('mouseleave',  up)
     }
 
-    wireHoldBtn('btn-slow',  '_sk8_slow')
-    wireHoldBtn('btn-ollie', '_sk8_ollie')
-    wireHoldBtn('btn-fast',  '_sk8_fast')
+    wireHoldBtn('btn-slow',  '_sk8_slow',  '_sk8_slow_latch')
+    wireHoldBtn('btn-ollie', '_sk8_ollie', '_sk8_ollie_latch')
+    wireHoldBtn('btn-fast',  '_sk8_fast',  '_sk8_fast_latch')
 
     // Pause: fires once on press (not held)
     const pauseFace = document.querySelector('#btn-pause .arc-btn-face')

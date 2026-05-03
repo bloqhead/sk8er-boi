@@ -93,15 +93,21 @@ export class Player {
     }
 
     // ── Unified jump edge detection ───────────────────────────────────
-    // Treat keyboard and DOM button as one logical button.
-    // "held" = either source is currently active.
-    // We track whether WE decided it was "down" last frame via _jumpHeld.
+    // held = either source currently active
     const kbDown  = this.keys.up.isDown || this.keys.space.isDown
     const domDown = !!window._sk8_ollie
+
+    // Consume latch counter — if >0, a touchstart fired since last frame
+    // This guarantees quick taps aren't missed even if touchend beat the frame
+    const latch = (window._sk8_ollie_latch || 0)
+    if (latch > 0) window._sk8_ollie_latch = 0
+
     const jumpHeld = kbDown || domDown
 
-    const jumpJustPressed  = jumpHeld  && !this._jumpHeld   // low→high edge
-    const jumpJustReleased = !jumpHeld && this._jumpHeld    // high→low edge
+    // jumpJustPressed: either keyboard edge OR latch consumed
+    const jumpJustPressed  = (kbDown && !this._jumpHeld) || latch > 0
+    // jumpJustReleased: was held last frame, nothing held now, no latch pending
+    const jumpJustReleased = !jumpHeld && this._jumpHeld && latch === 0
 
     const slowDown = this.keys.left.isDown  || !!window._sk8_slow
     const speedUp  = this.keys.right.isDown || !!window._sk8_fast
