@@ -62,14 +62,22 @@ export class ObstacleSystem {
     for (let i = this.pool.length - 1; i >= 0; i--) {
       const e = this.pool[i]
       e.sprite.x -= dx
+
+      // Update Y every frame to follow terrain — only for ground obstacles,
+      // not ramps/rails which use their own fixed Y relationship
+      if (e._groundOffset !== null && e._groundOffset !== undefined) {
+        const currentGY = this._groundYAt(e.sprite.x)
+        e.sprite.y = currentGY + e._groundOffset
+      }
+
       if (e.sprite.body) e.sprite.body.reset(e.sprite.x, e.sprite.y)
 
-      // Shadow tracks sprite
+      // Shadow sits on the terrain surface at the obstacle's X
       if (e.shadow) {
         e.shadow.x = e.sprite.x
-        e.shadow.y = e.spawnGY + 3
+        e.shadow.y = this._groundYAt(e.sprite.x) + 3
       }
-      // Pip (graphics drawn at 0,0 relative) just needs x/y moved
+      // Pip floats above the sprite
       if (e.pip) {
         e.pip.x = e.sprite.x
         e.pip.y = e.sprite.y - e.pipOffY
@@ -78,7 +86,7 @@ export class ObstacleSystem {
       if (e.sprite.x < -160) {
         e.sprite.destroy()
         if (e.shadow) e.shadow.destroy()
-        if (e.pip)    { e.pip.destroy() }
+        if (e.pip)    e.pip.destroy()
         this.pool.splice(i, 1)
       }
     }
@@ -102,6 +110,10 @@ export class ObstacleSystem {
     const y = def.flying
       ? gy - hPx - 18 - Math.random() * 14
       : def.low ? gy - hPx / 2 - 4 : gy - hPx / 2
+
+    // _groundOffset = how far above the ground surface the sprite centre sits.
+    // Negative = above ground. We reapply this every frame: sprite.y = groundY + offset.
+    const groundOffset = y - gy
 
     const sprite = this.scene.physics.add.staticImage(sx, y, key)
     sprite.setImmovable(true)
@@ -127,7 +139,8 @@ export class ObstacleSystem {
     this.pool.push({
       sprite, shadow, pip,
       spawnGY: gy,
-      pipOffY: hPx / 2 + 10,   // offset from sprite.y to pip centre
+      _groundOffset: groundOffset,
+      pipOffY: hPx / 2 + 10,
     })
   }
 
@@ -160,7 +173,7 @@ export class ObstacleSystem {
     s.rampBoost = 0.8 + Math.random() * 0.5
     this.ramps.add(s)
     this._lastObstacleX = sx
-    this.pool.push({ sprite: s, shadow: null, pip: null, spawnGY: gy, pipOffY: 0 })
+    this.pool.push({ sprite: s, shadow: null, pip: null, spawnGY: gy, _groundOffset: null, pipOffY: 0 })
   }
 
   _spawnRail() {
@@ -173,7 +186,7 @@ export class ObstacleSystem {
     s.setImmovable(true); s.isRail = true; s.isRamp = false
     this.rails.add(s)
     this._lastObstacleX = sx
-    this.pool.push({ sprite: s, shadow: null, pip: null, spawnGY: gy, pipOffY: 0 })
+    this.pool.push({ sprite: s, shadow: null, pip: null, spawnGY: gy, _groundOffset: null, pipOffY: 0 })
   }
 
   _warningColor(type) {

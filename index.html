@@ -104,6 +104,8 @@
         0 0 10px rgba(0,0,0,0.5);
       transition: transform 60ms, box-shadow 60ms;
       cursor: pointer;
+      /* Prevent browser zoom / scroll on button touches */
+      touch-action: none;
     }
 
     .arc-btn-face:active,
@@ -199,14 +201,25 @@
     function wireHoldBtn(id, flagKey) {
       const face = document.querySelector('#' + id + ' .arc-btn-face')
       if (!face) return
-      const down = () => { window[flagKey] = true;  face.classList.add('pressed') }
-      const up   = () => { window[flagKey] = false; face.classList.remove('pressed') }
-      face.addEventListener('touchstart',  down, { passive: true })
-      face.addEventListener('touchend',    up,   { passive: true })
-      face.addEventListener('touchcancel', up,   { passive: true })
-      face.addEventListener('mousedown',   down)
-      face.addEventListener('mouseup',     up)
-      face.addEventListener('mouseleave',  up)
+      const down = (e) => {
+        e.preventDefault()   // blocks pinch-zoom and double-tap zoom
+        window[flagKey] = true
+        face.classList.add('pressed')
+      }
+      const up = (e) => {
+        e.preventDefault()
+        window[flagKey] = false
+        face.classList.remove('pressed')
+      }
+      // Non-passive so preventDefault works
+      face.addEventListener('touchstart',  down, { passive: false })
+      face.addEventListener('touchend',    up,   { passive: false })
+      face.addEventListener('touchcancel', up,   { passive: false })
+      // Block touchmove on buttons so scrolling doesn't interfere
+      face.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false })
+      face.addEventListener('mousedown',  down)
+      face.addEventListener('mouseup',    up)
+      face.addEventListener('mouseleave', up)
     }
 
     wireHoldBtn('btn-slow',  '_sk8_slow')
@@ -216,12 +229,14 @@
     // Pause: fires once on press (not held)
     const pauseFace = document.querySelector('#btn-pause .arc-btn-face')
     if (pauseFace) {
-      const doPause = () => {
+      const doPause = (e) => {
+        e.preventDefault()
         pauseFace.classList.add('pressed')
         setTimeout(() => pauseFace.classList.remove('pressed'), 150)
         window.dispatchEvent(new CustomEvent('sk8_pause'))
       }
-      pauseFace.addEventListener('touchstart', doPause, { passive: true })
+      pauseFace.addEventListener('touchstart', doPause, { passive: false })
+      pauseFace.addEventListener('touchmove',  (e) => e.preventDefault(), { passive: false })
       pauseFace.addEventListener('mousedown',  doPause)
     }
   </script>
