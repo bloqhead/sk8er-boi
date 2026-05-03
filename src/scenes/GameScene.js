@@ -67,6 +67,17 @@ export class GameScene extends Phaser.Scene {
     }
 
     audio.startRolling()
+
+    // Listen for DOM pause button
+    this._pauseHandler = () => {
+      if (!this._gameOver) {
+        this.scene.launch('PauseScene')
+        this.scene.pause('GameScene')
+        this.scene.pause('HUDScene')
+      }
+    }
+    window.addEventListener('sk8_pause', this._pauseHandler)
+
     this.scale.on('resize', () => {
       this.scene.get('HUDScene')?.events.emit('resize')
     })
@@ -191,6 +202,7 @@ export class GameScene extends Phaser.Scene {
   shutdown() {
     audio.stopRolling()
     this.scale.off('resize')
+    if (this._pauseHandler) window.removeEventListener('sk8_pause', this._pauseHandler)
     if (this.terrain)        this.terrain.destroy()
     if (this.bg)             this.bg.destroy()
     if (this.particles)      this.particles.destroy()

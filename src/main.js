@@ -7,6 +7,7 @@ import { HUDScene }             from './scenes/HUDScene.js'
 import { LeaderboardScene }     from './scenes/LeaderboardScene.js'
 import { GameOverScene }        from './scenes/GameOverScene.js'
 import { LevelTransitionScene } from './scenes/LevelTransitionScene.js'
+import { PauseScene }          from './scenes/PauseScene.js'
 
 // RESIZE mode: canvas always fills the full viewport, no black bars.
 // Scenes use this.scale.width / this.scale.height for all layout.
@@ -46,6 +47,7 @@ const config = {
     LeaderboardScene,
     GameOverScene,
     LevelTransitionScene,
+    PauseScene,
   ],
 }
 

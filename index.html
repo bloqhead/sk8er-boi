@@ -117,7 +117,7 @@
     .arc-btn-face.btn-ollie { background: radial-gradient(circle at 35% 35%, #ee2060, #880020); width: 68px; height: 68px; font-size: 30px; }
     .arc-btn-face.btn-fast  { background: radial-gradient(circle at 35% 35%, #2a55ee, #0a1888); }
 
-    .arc-btn-label {
+    .arc-btn-face.btn-pause { background: radial-gradient(circle at 35% 35%, #555577, #22223a); width: 44px; height: 44px; font-size: 20px; }
       font-family: 'Press Start 2P', monospace;
       font-size: 7px;
       color: #888;
@@ -163,6 +163,10 @@
           <div class="arc-btn-face btn-fast" data-action="fast">fast_forward</div>
           <span class="arc-btn-label">FAST</span>
         </div>
+        <div class="arc-btn" id="btn-pause">
+          <div class="arc-btn-face btn-pause" data-action="pause">pause</div>
+          <span class="arc-btn-label">PAUSE</span>
+        </div>
       </div>
     </div>
   </div>
@@ -179,6 +183,7 @@
     window._sk8_slow  = false
     window._sk8_ollie = false
     window._sk8_fast  = false
+    window._sk8_pause = false
 
     function wireBtn(id, flagKey) {
       const face = document.querySelector(`#${id} .arc-btn-face`)
@@ -188,7 +193,6 @@
       face.addEventListener('touchstart',  down, { passive: true })
       face.addEventListener('touchend',    up,   { passive: true })
       face.addEventListener('touchcancel', up,   { passive: true })
-      // Mouse fallback for desktop testing
       face.addEventListener('mousedown', down)
       face.addEventListener('mouseup',   up)
       face.addEventListener('mouseleave', up)
@@ -197,6 +201,19 @@
     wireBtn('btn-slow',  '_sk8_slow')
     wireBtn('btn-ollie', '_sk8_ollie')
     wireBtn('btn-fast',  '_sk8_fast')
+
+    // Pause button fires once on press (not held)
+    const pauseFace = document.querySelector('#btn-pause .arc-btn-face')
+    if (pauseFace) {
+      const doPause = () => {
+        pauseFace.classList.add('pressed')
+        setTimeout(() => pauseFace.classList.remove('pressed'), 150)
+        // Signal Phaser via a custom event
+        window.dispatchEvent(new CustomEvent('sk8_pause'))
+      }
+      pauseFace.addEventListener('touchstart', doPause, { passive: true })
+      pauseFace.addEventListener('mousedown',  doPause)
+    }
   </script>
 
   <script type="module" src="/src/main.js"></script>

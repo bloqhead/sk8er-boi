@@ -36,7 +36,22 @@ export class HUDScene extends Phaser.Scene {
       fontFamily: "'Press Start 2P'", fontSize: font.sm + 'px', color: '#f5e642',
     })
 
-    // ── Lives (hearts, top right) ─────────────────────────────────────
+    // ── Pause button (top right, beside hearts) ───────────────────────
+    const pauseBtn = this.add.text(W - u * 0.3, u * 0.25, '⏸', {
+      fontFamily: 'Arial',
+      fontSize:   Math.max(12, u * 0.9) + 'px',
+      color:      '#888888',
+    }).setOrigin(1, 0).setInteractive({ useHandCursor: true }).setDepth(50)
+    pauseBtn.on('pointerover', () => pauseBtn.setColor('#ffffff'))
+    pauseBtn.on('pointerout',  () => pauseBtn.setColor('#888888'))
+    pauseBtn.on('pointerdown', () => {
+      const gs = this.scene.get('GameScene')
+      if (gs) {
+        this.scene.scene.launch('PauseScene')
+        this.scene.scene.pause('GameScene')
+        this.scene.scene.pause('HUDScene')
+      }
+    })
     const hSize = Math.max(8, u * 0.7)
     const hGap  = hSize * 1.6
     this._hearts = []

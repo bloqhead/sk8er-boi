@@ -1,5 +1,5 @@
 import { GAME_CONSTANTS } from '../data/levels.js'
-import { SkaterAnimator } from '../systems/SkaterAnimator.js'
+import { SkaterAnimator, TRICK_NAMES } from '../systems/SkaterAnimator.js'
 import { audio } from '../audio/AudioManager.js'
 
 const STATE = {
@@ -8,22 +8,18 @@ const STATE = {
   AIRBORNE: 'airborne',
   GRINDING: 'grinding',
   CRASHED:  'crashed',
-  DEAD:     'dead'
+  DEAD:     'dead',
 }
 
-const TRICKS = [
-  'KICKFLIP', 'HEELFLIP', '360 FLIP', 'VARIAL',
-  'HARDFLIP', 'SHOVE-IT', 'NOSEGRAB', 'TAILGRAB', 'CROOKED'
-]
-
-const AIR_MOVE_SPEED = 170   // px/s while airborne
+const AIR_MOVE_SPEED = 160
 
 export class Player {
   constructor(scene, x, y) {
     this.scene           = scene
     this.state           = STATE.ROLLING
     this.chargeTime      = 0
-    this._jumpWasDown    = false
+    this._jumpWasDown    = false   // keyboard/gamepad held last frame
+    this._domWasDown     = false   // DOM button held last frame (separate tracker)
     this.invincibleTimer = 0
     this.lives           = GAME_CONSTANTS.LIVES
     this.score           = 0
@@ -31,7 +27,6 @@ export class Player {
     this.combo           = 0
     this.grindTime       = 0
     this.airTime         = 0
-    this.spinSpeed       = 0
     this._trickDone      = false
     this._baseX          = x
     this._targetX        = x
@@ -39,14 +34,13 @@ export class Player {
 
     this._create(x, y)
     this._bindInput()
-    this.animator = new SkaterAnimator(this.sprite)
+    this.animator = new SkaterAnimator(this.sprite, scene)
   }
 
   _create(x, y) {
     this.sprite = this.scene.physics.add.sprite(x, y, 'skater', 'roll_a')
     this.sprite.setDepth(10)
-    // Tight hitbox — torso only, ~50% of sprite visual area
-    // Sprite canvas: 36×54 px. Hitbox: 16×26 centered on chest.
+    // Tight hitbox — torso only
     this.sprite.body.setSize(16, 26)
     this.sprite.body.setOffset(10, 15)
     this.sprite.body.setMaxVelocityY(900)
@@ -61,6 +55,8 @@ export class Player {
       space: kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
       right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
       left:  kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
+      p:     kb.addKey(Phaser.Input.Keyboard.KeyCodes.P),
+      esc:   kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC),
     }
   }
 
@@ -82,32 +78,54 @@ export class Player {
 
     this.invincibleTimer = Math.max(0, this.invincibleTimer - delta)
 
-    // Smooth X slide toward target (not while crashed)
+    // P / ESC → pause
+    if (Phaser.Input.Keyboard.JustDown(this.keys.p) ||
+        Phaser.Input.Keyboard.JustDown(this.keys.esc)) {
+      this.scene.scene.launch('PauseScene')
+      this.scene.scene.pause('GameScene')
+      this.scene.scene.pause('HUDScene')
+      return
+    }
+
+    // Smooth X slide
     if (this.state !== STATE.CRASHED) {
       const lerpT = 1 - Math.pow(1 - this._xLerpSpeed * 0.01, delta / 16)
       this.sprite.x = Phaser.Math.Linear(this.sprite.x, this._targetX, lerpT)
     }
 
-    const jumpDown = this.keys.up.isDown || this.keys.space.isDown || window._sk8_ollie
-    const slowDown = this.keys.left.isDown  || window._sk8_slow
-    const speedUp  = this.keys.right.isDown || window._sk8_fast
+    // ── Input — edge detect jump for BOTH keyboard and DOM button ─────
+    const kbJumpDown  = this.keys.up.isDown || this.keys.space.isDown
+    const domJumpDown = !!window._sk8_ollie
 
-    // ── Airborne: rotate + air movement ──────────────────────────────
+    // "jumpDown" = either source currently held
+    const jumpDown = kbJumpDown || domJumpDown
+
+    // "jumpJustPressed" = fresh press this frame from either source
+    const jumpJustPressed = (kbJumpDown  && !this._jumpWasDown) ||
+                            (domJumpDown && !this._domWasDown)
+
+    // "jumpJustReleased" = was held last frame, not held now
+    const jumpJustReleased = (this._jumpWasDown  && !kbJumpDown) ||
+                             (this._domWasDown   && !domJumpDown)
+
+    const slowDown = this.keys.left.isDown  || !!window._sk8_slow
+    const speedUp  = this.keys.right.isDown || !!window._sk8_fast
+
+    // ── Airborne: board trick + air movement (NO sprite rotation) ────
     if (this.state === STATE.AIRBORNE) {
       this.airTime += delta
-      this.sprite.rotation += this.spinSpeed * (delta / 1000)
+      // Body stays upright — no sprite.rotation
 
       if (slowDown) {
         const newX = Math.max(20, this.sprite.x - AIR_MOVE_SPEED * (delta / 1000))
-        this.sprite.x   = newX
-        this._targetX   = newX
+        this.sprite.x = newX; this._targetX = newX
       } else if (speedUp) {
         const newX = Math.min(this._baseX + 130, this.sprite.x + AIR_MOVE_SPEED * (delta / 1000))
-        this.sprite.x   = newX
-        this._targetX   = newX
+        this.sprite.x = newX; this._targetX = newX
       }
 
-      if (!this._trickDone && this.airTime > 180 && Math.random() < 0.003 * delta) {
+      // Trigger random trick at apex (200ms into air)
+      if (!this._trickDone && this.airTime > 200 && Math.random() < 0.003 * delta) {
         this._doMidAirTrick()
       }
     } else {
@@ -117,55 +135,60 @@ export class Player {
     }
 
     switch (this.state) {
-      case STATE.ROLLING:  this._handleRolling(delta, jumpDown, slowDown, speedUp); break
-      case STATE.CHARGING: this._handleCharging(delta, jumpDown); break
+      case STATE.ROLLING:  this._handleRolling(delta, jumpJustPressed, slowDown, speedUp); break
+      case STATE.CHARGING: this._handleCharging(delta, jumpDown, jumpJustReleased); break
       case STATE.AIRBORNE: this._handleAirborne(); break
-      case STATE.GRINDING: this._handleGrinding(delta, jumpDown); break
+      case STATE.GRINDING: this._handleGrinding(delta, jumpJustPressed); break
       case STATE.CRASHED:  this._handleCrashed(delta); break
     }
 
-    this._jumpWasDown = jumpDown
+    // Store for next frame's edge detection
+    this._jumpWasDown = kbJumpDown
+    this._domWasDown  = domJumpDown
 
     if (this.sprite.y > this.scene.scale.height + 60) this.crash()
     this.animator.update(this.state, delta, gameSpeed)
   }
 
-  _handleRolling(dt, jumpDown, slowDown, speedUp) {
-    if (this.onGround) {
-      this.scene.particles.spawnWheelSmoke(this.x - 8, this.y + 16)
-    }
-    // Start charging on fresh press only
-    if (jumpDown && !this._jumpWasDown && this.onGround) {
+  _handleRolling(dt, jumpJustPressed, slowDown, speedUp) {
+    if (this.onGround) this.scene.particles.spawnWheelSmoke(this.x - 8, this.y + 16)
+
+    if (jumpJustPressed && this.onGround) {
       this.state      = STATE.CHARGING
       this.chargeTime = 0
       audio.resume()
-      return  // don't process speed on same frame
+      return
     }
-    // Speed controls only while rolling (not charging)
     if (slowDown)     this.scene.reduceSpeed()
     else if (speedUp) this.scene.increaseSpeed()
   }
 
-  _handleCharging(dt, jumpDown) {
+  _handleCharging(dt, jumpDown, jumpJustReleased) {
     this.chargeTime += dt
-    // Launch on button release OR at max charge auto-fire
-    const released = this._jumpWasDown && !jumpDown
-    const maxed    = this.chargeTime >= GAME_CONSTANTS.JUMP_CHARGE_TIME * 1.5
-    if (released || maxed) this._launch()
+    const maxed = this.chargeTime >= GAME_CONSTANTS.JUMP_CHARGE_TIME * 1.5
+    if (jumpJustReleased || maxed) this._launch()
   }
 
   _launch() {
     const pct   = this.chargePercent
     const power = Phaser.Math.Linear(GAME_CONSTANTS.JUMP_POWER_MIN, GAME_CONSTANTS.JUMP_POWER_MAX, pct)
     this.sprite.body.setVelocityY(power)
-    this.spinSpeed = pct * 5 + 1
-    this.state     = STATE.AIRBORNE
+    this.state  = STATE.AIRBORNE
+
+    // Pick trick based on charge — higher charge = fancier trick
+    const trickIdx   = Math.min(Math.floor(pct * TRICK_NAMES.length), TRICK_NAMES.length - 1)
+    const trickName  = TRICK_NAMES[trickIdx]
+    const airTime    = 400 + pct * 400  // estimated air time for trick timing
+    this.animator.startTrick(trickName, airTime)
+    this._currentTrickName = trickName
+
     this.scene.particles.spawnOllieParticles(this.x, this.y + 12, pct)
     audio.playOllie(pct)
     this.score += GAME_CONSTANTS.SCORE_OLLIE
     this.scene.events.emit('score-update', this.score)
     this.chargeTime = 0
     this.animator.forceReset()
+    this.animator.startTrick(trickName, airTime)  // re-start after forceReset
   }
 
   _handleAirborne() {
@@ -174,16 +197,19 @@ export class Player {
 
   _land() {
     this.state    = STATE.ROLLING
-    this._targetX = this.sprite.x  // resume from wherever we landed
+    this._targetX = this.sprite.x
+    this.animator.stopTrick()
     this.scene.particles.spawnLandParticles(this.x, this.y + 16)
     audio.playLand()
     if (this._trickDone) {
       this.combo++
       this.score += GAME_CONSTANTS.SCORE_TRICK * this.combo
       this.scene.events.emit('score-update', this.score)
+      this.scene.events.emit('trick', this._currentTrickName || 'TRICK')
     } else {
       this.combo = Math.max(0, this.combo - 1)
     }
+    this._currentTrickName = null
     this.animator.forceReset()
   }
 
@@ -191,33 +217,23 @@ export class Player {
     if (this._trickDone) return
     this._trickDone = true
     this.tricks++
-    const name = TRICKS[Math.floor(Math.random() * TRICKS.length)]
-    this.scene.particles.spawnTrickEffect(this.x, this.y, name)
     audio.playScoreUp(this.combo + 1)
-    this.score += GAME_CONSTANTS.SCORE_TRICK
-    this.scene.events.emit('score-update', this.score)
-    this.scene.events.emit('trick', name)
   }
 
-  _handleGrinding(dt, jumpDown) {
+  _handleGrinding(dt, jumpJustPressed) {
     this.grindTime += dt
-    if (jumpDown && !this._jumpWasDown && this.onGround) {
+    if (jumpJustPressed && this.onGround) {
       this.sprite.body.setVelocityY(-600)
       this.state     = STATE.AIRBORNE
-      this.spinSpeed = 3
       audio.playOllie(0.6)
       this.grindTime = 0
+      this.animator.startTrick('SHOVE-IT', 400)
       return
     }
-    if (!this.onGround) {
-      this.state     = STATE.AIRBORNE
-      this.grindTime = 0
-      return
-    }
+    if (!this.onGround) { this.state = STATE.AIRBORNE; this.grindTime = 0; return }
     const pts = Math.floor(this.grindTime / 80) * GAME_CONSTANTS.SCORE_RAIL
     if (pts > 0) {
-      this.score    += pts
-      this.grindTime = 0
+      this.score    += pts; this.grindTime = 0
       this.scene.particles.spawnGrindSparks(this.x, this.y + 14)
       audio.playGrind()
       this.scene.events.emit('score-update', this.score)
@@ -234,12 +250,11 @@ export class Player {
 
   crash() {
     if (this.isInvincible || this.state === STATE.CRASHED || this.state === STATE.DEAD) return
-    this.lives--
-    this.combo      = 0
-    this.state      = STATE.CRASHED
-    this.chargeTime = 0
+    this.lives--; this.combo = 0; this.state = STATE.CRASHED; this.chargeTime = 0
+    this.sprite.rotation = 0
     this.sprite.body.setVelocityY(-250)
     this.sprite.body.setVelocityX(-80)
+    this.animator.stopTrick()
     this.scene.particles.spawnCrashParticles(this.x, this.y)
     audio.playCrash()
     this.scene.events.emit('crash', this.lives)
@@ -247,11 +262,10 @@ export class Player {
   }
 
   _respawn() {
-    this.state      = STATE.ROLLING
-    this.chargeTime = 0
-    this.sprite.body.setVelocityX(0)
-    this.sprite.body.setVelocityY(0)
-    this._targetX        = this._baseX
+    this.state = STATE.ROLLING; this.chargeTime = 0
+    this.sprite.body.setVelocityX(0); this.sprite.body.setVelocityY(0)
+    this.sprite.rotation = 0
+    this._targetX = this._baseX
     this.invincibleTimer = GAME_CONSTANTS.INVINCIBLE_TIME
     this.animator.forceReset()
     this.scene.tweens.add({
@@ -263,19 +277,18 @@ export class Player {
 
   startGrind() {
     if (this.state === STATE.CRASHED || this.state === STATE.DEAD) return
-    this.state     = STATE.GRINDING
-    this.grindTime = 0
+    this.state = STATE.GRINDING; this.grindTime = 0
     this.sprite.rotation = 0
+    this.animator.stopTrick()
     audio.playGrind()
     this.scene.events.emit('grind-start')
   }
 
   rampLaunch(boost = 1.0) {
     if (this.state === STATE.CRASHED || this.state === STATE.DEAD) return
-    const power = GAME_CONSTANTS.JUMP_POWER_MIN * 0.85 * boost
-    this.sprite.body.setVelocityY(power)
-    this.state     = STATE.AIRBORNE
-    this.spinSpeed = 3 * boost
+    this.sprite.body.setVelocityY(GAME_CONSTANTS.JUMP_POWER_MIN * 0.85 * boost)
+    this.state = STATE.AIRBORNE
+    this.animator.startTrick('360 FLIP', 500)
     this.scene.particles.spawnRampLaunchEffect(this.x, this.y)
     audio.playOllie(0.75)
     this.scene.events.emit('ramp-launch')
